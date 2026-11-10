@@ -502,14 +502,14 @@ function stripTagBlocks(t){
 const MOOD_NAMES="neutral|joy|hope|sadness|fear|anger|love|confusion";
 const stripMood  = t=>stripTagBlocks(String(t||"").replace(/^[\s\[\(`*_]*MOOD\s*[:=]\s*\w+[ \t\]\)`*_]*\n?/m,"")
     .replace(new RegExp("^[\\s\\[\\(`*_]*mood\\s*[:=]\\s*(?:"+MOOD_NAMES+")\\b[ \\t\\]\\)`*_]*\\n?","i"),""))
-  .replace(new RegExp("[\\[\\(`*_]*\\bMOOD\\s*[:=]\\s*(?:"+MOOD_NAMES+")\\b[\\]\\)`*_]*","g"),"")
+  .replace(new RegExp("[\\[\\(`*_<]*\\bMOOD\\s*[:=\\-\u2013\u2014]\\s*(?:"+MOOD_NAMES+")\\b[\\]\\)`*_>]*","gi"),"")
   .replace(/\[music (?:now playing|started|stopped)[^\]]*\]/gi,"")
   .replace(/\[\s*\]|\(\s*\)/g,"").replace(/[ \t]*[\[\(][ \t]*$/,"").replace(/^[ \t]*[\]\)][ \t]*/,"")
   .replace(/\n{3,}/g,"\n\n").trim();
 // Last line of defence before speech: nothing that looks like a tag, JSON or a brace is ever read aloud.
 function scrubSpeech(t){
   return stripTagBlocks(String(t||""))
-    .replace(/\bMOOD\s*[:=]\s*\w+/g," ").replace(/\[[^\]\n]{0,80}\]/g," ")      // [stage directions], [notes], [tags]
+    .replace(/[<\[\(*_`]*\bMOOD\s*[:=\-\u2013\u2014]\s*\w+[>\]\)*_`]*/gi," ").replace(/\[[^\]\n]{0,80}\]/g," ")      // [stage directions], [notes], [tags]
     .replace(/"[A-Za-z_]+"\s*:/g," ").replace(/[{}\[\]`*]/g," ")
     .replace(/[ \t]{2,}/g," ").trim();
 }
@@ -2234,7 +2234,7 @@ Open with ONE warm sentence that references SOMETHING SPECIFIC from what you kno
             dbProfile.mood_log||[], storedAnchors||[], storedJInsights||[], lastSess
           );
           const raw = await callClaude([{role:"user",content:"[generate home nudge]"}], nudgeCtx);
-          const text = raw.replace(/^MOOD:\w+\n?/m,"").trim();
+          const text = stripMood(raw).trim();
           if(text && text.length > 10) setHomeNudge({text, source:"echo"});
         } catch(e) {}
         setNudgeLoading(false);
