@@ -1,0 +1,13 @@
+Recorded instrument samples used by YoEcho (echo-music.js)
+
+Taken from the tonejs-instruments library by Nicholaus P. Brosowsky (MIT License):
+https://github.com/nbrosowsky/tonejs-instruments
+
+Original recordings: Versilian Studios VSCO 2 Community Edition (piano, trumpet, trombone, flute, violin, ...),
+Karoryfer Samples (electric bass, electric guitar, saxophone), University of Iowa Electronic Music Studios (acoustic guitar).
+Files here were trimmed, level-matched and re-encoded as small mono mp3s.
+
+MIT License - Copyright (c) 2018 Nicholaus P. Brosowsky
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated files, to deal in the
+Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies,
+subject to the inclusion of this copyright and permission notice in all copies. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.

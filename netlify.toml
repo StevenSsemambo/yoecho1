@@ -1,0 +1,45 @@
+# ── YoEcho — Netlify Configuration ───────────────────────────────────────────
+
+[build]
+  publish = "public"
+  functions = "netlify/functions"
+
+# SPA fallback — all routes serve index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Security headers
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "microphone=(self)"
+
+# 3D face files: big, rarely change, so let browsers keep them for a week
+# The avatar files are stored gzip-compressed (0.8 MB instead of 2.3 MB). This header makes the browser
+# unpack them itself; echo-face.js also unpacks them if a host ever drops the header.
+[[headers]]
+  for = "/avatars/*"
+  [headers.values]
+    Content-Encoding = "gzip"
+    Content-Type = "model/gltf-binary"
+    Cache-Control = "public, max-age=604800"
+
+[[headers]]
+  for = "/vendor/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+
+# Generative music engine (one file, versioned with ?v= in index.html)
+[[headers]]
+  for = "/echo-music.js"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
+# Reminders + check-in notifications: runs every 2 minutes
+[functions."push-cron"]
+  schedule = "*/2 * * * *"
