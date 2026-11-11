@@ -15,3 +15,10 @@ subject to the inclusion of this copyright and permission notice in all copies. 
 Drums:
 - Acoustic kit: "Pearl Master Studio Pack 1" by enoe, via oramics/sampled - Creative Commons Attribution 3.0 (https://creativecommons.org/licenses/by/3.0/). Trimmed and re-encoded.
 - LinnDrum LM-2 kit: public domain, via oramics/sampled (https://github.com/oramics/sampled).
+
+More recordings (v10):
+- Electric piano, drawbar (Hammond-style) organ, clavinet, marimba, harp, upright bass and string ensemble come from the FluidR3 GM SoundFont,
+  Copyright (c) 2000-2002, 2008, 2013 Frank Wen - MIT License, as converted to mp3 by the "soundfont-for-samplers" project (MIT).
+- Pipe organ: VSCO 2 Community Edition (CC0) via tonejs-instruments (MIT), as above.
+- Extra percussion (cabasa, tambourine, cowbell, congas, clap, stick) from the public-domain LinnDrum LM-2 set; Roland CR-78 and TR-505 drum-machine kits
+  are public domain; all via oramics/sampled (https://github.com/oramics/sampled).
