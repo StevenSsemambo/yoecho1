@@ -22,3 +22,6 @@ More recordings (v10):
 - Pipe organ: VSCO 2 Community Edition (CC0) via tonejs-instruments (MIT), as above.
 - Extra percussion (cabasa, tambourine, cowbell, congas, clap, stick) from the public-domain LinnDrum LM-2 set; Roland CR-78 and TR-505 drum-machine kits
   are public domain; all via oramics/sampled (https://github.com/oramics/sampled).
+
+Kalimba, glockenspiel (used for "bells") and choir "aahs" (v11): FluidR3 GM SoundFont, Copyright (c) 2000-2002, 2008, 2013 Frank Wen
+(MIT; the midi-js-soundfonts conversion by Benjamin Gleitzman lists it under Creative Commons Attribution 3.0 - credit given here in either case).

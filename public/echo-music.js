@@ -1348,11 +1348,14 @@
     strings: { bank: "strings", sus: 1, atk: .2, rel: .45, cost: 3 },
     keys:    { bank: "epiano", rel: .3, cost: 1 },
     clav:    { bank: "clavinet", rel: .08, cost: 1 },
-    marimba: { bank: "marimba", rel: .25, cost: 1 },
-    harp:    { bank: "harp", rel: .4, cost: 1 },
+    marimba: { bank: "marimba", rel: .25, min: .35, cost: 1 },
+    harp:    { bank: "harp", rel: .4, min: .7, cost: 1 },
     upbass:  { bank: "upright", rel: .1, cost: 1 },
     hammond: { bank: "drawbar", sus: 1, atk: .008, rel: .07, cost: 2 },
-    organ:   { bank: "organ", sus: 1, atk: .04, rel: .25, cost: 2 }
+    organ:   { bank: "organ", sus: 1, atk: .04, rel: .25, cost: 2 },
+    kalimba: { bank: "kalimba", rel: .4, min: .9, cost: 1 },
+    bells:   { bank: "bells", rel: .6, min: 1.4, cost: 1 },
+    choir:   { bank: "choir", sus: 1, atk: .45, rel: .9, cost: 3 }
   };
 
   function Engine(ctx, dest, opts) {
@@ -1745,11 +1748,11 @@
     };
 
     /* ── recorded-instrument voice: pick the nearest recorded note, repitch it with playbackRate, shape it with an envelope ── */
-    var SLOUD = { piano: 1.18, keys: 1.05, clav: 1.01, marimba: 1.18, harp: 1.14, upbass: 3.1, hammond: 1.2, organ: .81, guitar: 1.14, eguitar: 1.13, lguitar: .7, dguitar: .56, ebass: 1.83, sax: 1.08, brass: .97, horns: .96, flute: 1.04, violin: 1.3, strings: .83 };
+    var SLOUD = { piano: 1.18, keys: 1.05, clav: 1.01, marimba: 1.18, harp: 1.14, upbass: 3.1, hammond: 1.2, organ: .81, kalimba: 1.4, bells: 1.2, choir: .55, guitar: 1.14, eguitar: 1.13, lguitar: .7, dguitar: .56, ebass: 1.83, sax: 1.08, brass: .97, horns: .96, flute: 1.04, violin: 1.3, strings: .83 };
     function sampleVoice(E, sp, bank, f, t, d, v, o) {
       var m = smpMidi(f), root = bank.notes[0], k, bi;
       for (k = 1; k < bank.notes.length; k++) if (Math.abs(bank.notes[k] - m) < Math.abs(root - m)) root = bank.notes[k];
-      var buf = bank.bufs[root], rate = Math.pow(2, (m - root) / 12), dd = Math.max(d, sp.sus ? .2 : .1), rel = sp.rel, atk = sp.atk || .003;
+      var buf = bank.bufs[root], rate = Math.pow(2, (m - root) / 12), dd = Math.max(d, sp.min || (sp.sus ? .2 : .1)), rel = sp.rel, atk = sp.atk || .003;
       var n = sp.ens ? 2 : 1, end = t + dd + rel, dest = o, ws, pre, lp;
       if (sp.dist) {
         pre = ctx.createGain(); pre.gain.value = sp.dist; ws = ctx.createWaveShaper(); ws.curve = sp.dist > 3 ? distCurve : odCurve; if (!E.lite) ws.oversample = "2x";

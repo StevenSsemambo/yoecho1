@@ -239,3 +239,7 @@ Controls: `EchoMusic.samples.enable(false)` falls back to pure synthesis; `.stat
 ## More recordings (v10)
 
 Added recorded: electric piano ("keys"), Hammond-style drawbar organ, pipe organ, clavinet, marimba, a new **harp**, upright bass and a real string-ensemble section (FluidR3 GM, MIT), plus percussion (tambourine, cowbell, congas, clap, rim, shaker) on the acoustic and hip-hop kits, and recorded **Roland CR-78** (afrobeats/amapiano) and **TR-505** (house, pop) drum machines. House and pop keep their synthesized kick. Violin, sax, brass, flute and guitars are unchanged from v9. Everything is lazy-loaded with synth fallback; total sample folder is about 6 MB. Credits are in `public/samples/CREDITS.txt`.
+
+## Kalimba, bells and choir (v11)
+
+Kalimba, bells (a recorded glockenspiel) and choir now play recordings too (FluidR3 GM, ~0.6 MB). Still synthesized on purpose: pads, sub, 808 and synth basses, risers and effects. Total sample folder is about 7 MB, all lazy-loaded with synth fallback.
