@@ -1304,30 +1304,56 @@
   var SMP_DIR = (function () { try { var sc = global.document && global.document.currentScript; return sc && sc.src ? sc.src.replace(/[?#].*$/, "").replace(/[^\/]*$/, "") : ""; } catch (e) { return ""; } })();
   var SMP = { on: true, base: SMP_DIR ? SMP_DIR + "samples/" : "samples/", man: null, manP: null, banks: {} };
   function smpMidi(f) { return 69 + 12 * Math.log(f / 440) / Math.LN2; }
+  /* memory: decoded audio is raw floats, so ~180 MB if every bank were loaded. Banks decode at their own (low) sample rate, and a budget evicts
+   * the least-recently-used idle banks; if nothing can be evicted a new bank simply waits and the synthesized voice keeps playing. */
+  var SMP_DEC = {};
+  function smpDecoder(ctx, rate) {
+    try { var AC = global.OfflineAudioContext || global.webkitOfflineAudioContext; if (!AC) return ctx; return SMP_DEC[rate] || (SMP_DEC[rate] = new AC(1, 1, rate)); } catch (e) { return ctx; }
+  }
+  function smpBudget() {
+    if (SMP.budgetMB) return SMP.budgetMB * 1048576;
+    var dm = global.navigator && global.navigator.deviceMemory;     /* GB, when the browser says (Chrome/Android); iOS does not */
+    return (dm ? Math.max(32, Math.min(128, dm * 16)) : 72) * 1048576;
+  }
+  function smpBytes() { var n = 0, k; for (k in SMP.banks) n += SMP.banks[k].bytes || 0; return n; }
+  function smpRoom(need) {           /* make room for `need` bytes by dropping idle banks, oldest first; false if it will not fit */
+    var budget = smpBudget(), now = Date.now(), tot = smpBytes(), names;
+    if (tot + need <= budget) return true;
+    names = Object.keys(SMP.banks).filter(function (k) { var b = SMP.banks[k]; return b.ready && now - (b.used || 0) > 30000; })
+      .sort(function (x, y) { return (SMP.banks[x].used || 0) - (SMP.banks[y].used || 0); });
+    while (names.length && tot + need > budget) { var k = names.shift(); tot -= SMP.banks[k].bytes || 0; delete SMP.banks[k]; }
+    return tot + need <= budget;
+  }
   function smpLoad(name, ctx) {
     var b = SMP.banks[name]; if (b) return b;
-    b = SMP.banks[name] = { ready: false, failed: 0, bufs: {}, notes: [], loop: {}, kind: "pluck" };
+    b = { ready: false, failed: 0, bufs: {}, notes: [], loop: {}, kind: "pluck", bytes: 0, used: Date.now() };
+    SMP.banks[name] = b;
     try {
       if (!SMP.manP) SMP.manP = global.fetch(SMP.base + "manifest.json").then(function (r) { if (!r.ok) throw new Error("manifest " + r.status); return r.json(); });
       b.p = SMP.manP.then(function (man) {
         var meta = man[name]; if (!meta) throw new Error("no bank " + name);
         b.kind = meta.k; b.loop = meta.loop || {};
+        var rate = b.kind === "drum" ? 44100 : 32000, dec = smpDecoder(ctx, rate);
+        var est = meta.n.length * rate * (b.kind === "drum" ? 1 : 3) * 4;
+        if (!smpRoom(est)) { b.blocked = true; throw new Error("memory budget"); }
+        b.bytes = est; b.act = 0;           /* reserve the estimate now so banks loading in parallel see each other */
         var queue = meta.n.slice(), run = function () {
           var m = queue.shift(); if (m === undefined) return Promise.resolve();
           return global.fetch(SMP.base + name + "/" + m + ".mp3").then(function (r) { if (!r.ok) throw new Error("sample " + r.status); return r.arrayBuffer(); })
-            .then(function (ab) { return ctx.decodeAudioData(ab); }).then(function (buf) { b.bufs[m] = buf; b.notes.push(m); }).then(run);
+            .then(function (ab) { return dec.decodeAudioData(ab); }).then(function (buf) { b.bufs[m] = buf; b.notes.push(m); b.act += buf.length * buf.numberOfChannels * 4; }).then(run);
         };
         return Promise.all([run(), run(), run(), run()]);
-      }).then(function () { if (b.kind !== "drum") b.notes.sort(function (x, y) { return x - y; }); b.ready = b.notes.length > 0; if (!b.ready) throw new Error("empty"); })
-        .catch(function () { b.failed = Date.now(); SMP.manP = null; });
+      }).then(function () { if (b.kind !== "drum") b.notes.sort(function (x, y) { return x - y; }); b.ready = b.notes.length > 0; if (!b.ready) throw new Error("empty"); b.bytes = b.act; b.used = Date.now(); })
+        .catch(function () { b.failed = Date.now(); b.bytes = 0; b.bufs = {}; b.notes = []; if (!b.blocked) SMP.manP = null; });
     } catch (e) { b.failed = Date.now(); }
     return b;
   }
-  function smpGet(name, ctx) {       /* the bank if it is ready, else start (or retry after a minute) and return null */
+  function smpGet(name, ctx) {       /* the bank if it is ready, else start (or retry after a while) and return null */
     var b = SMP.banks[name];
-    if (b && b.failed && Date.now() - b.failed > 60000) { delete SMP.banks[name]; b = null; }
+    if (b && b.failed && Date.now() - b.failed > (b.blocked ? 15000 : 60000)) { delete SMP.banks[name]; b = null; }
     if (!b) b = smpLoad(name, ctx);
-    return b.ready ? b : null;
+    if (b.ready) { b.used = Date.now(); return b; }
+    return null;
   }
   /* drum kit -> recorded kit (CC-BY Pearl Master Studio by enoe; public-domain LinnDrum LM-2). Kits not listed stay synthesized. */
   var DRUMBANK = { rock: "drums-acoustic", rnr: "drums-acoustic", jazz: "drums-acoustic", reggae: "drums-acoustic", funk: "drums-acoustic", boombap: "drums-lm2", afro: "drums-cr78", edm: "drums-tr505", classic: "drums-tr505" };
@@ -2282,7 +2308,7 @@
     like: like, saved: saved, playSaved: playSaved, tasteSummary: tasteSummary, info: info, level: level,
     on: function (fn) { P.listeners.push(fn); return function () { API.off(fn); }; }, off: function (fn) { P.listeners = P.listeners.filter(function (x) { return x !== fn; }); },
     parseBrief: parseBrief, moods: MOOD_LIST.slice(), styles: STYLE_LIST.map(function (k) { return { id: k, name: STYLES[k].name }; }),
-    samples: { setBase: function (u) { SMP.base = u; }, enable: function (on) { SMP.on = !!on; }, enabled: function () { return SMP.on; }, status: function () { var o = {}; for (var k in SMP.banks) o[k] = SMP.banks[k].ready ? "ready" : SMP.banks[k].failed ? "failed" : "loading"; return o; }, preload: function (names) { var c = ensureCtx(); if (c) (names || Object.keys(SMAP).map(function (k) { return SMAP[k].bank; }).concat(["drums-acoustic", "drums-lm2"])).forEach(function (b) { smpGet(b, c); }); } },
+    samples: { setBase: function (u) { SMP.base = u; }, memory: function () { return { mb: +(smpBytes() / 1048576).toFixed(1), budgetMB: +(smpBudget() / 1048576).toFixed(0), banks: Object.keys(SMP.banks).filter(function (k) { return SMP.banks[k].ready; }).length }; }, setBudgetMB: function (n) { SMP.budgetMB = n; }, enable: function (on) { SMP.on = !!on; }, enabled: function () { return SMP.on; }, status: function () { var o = {}; for (var k in SMP.banks) o[k] = SMP.banks[k].ready ? "ready" : SMP.banks[k].failed ? "failed" : "loading"; return o; }, preload: function (names) { var c = ensureCtx(); if (c) (names || Object.keys(SMAP).map(function (k) { return SMAP[k].bank; }).concat(["drums-acoustic", "drums-lm2"])).forEach(function (b) { smpGet(b, c); }); } },
     mix: mix, mixNext: mixNext, mixInfo: mixInfo, buildMixPlan: buildMixPlan, renderMix: renderMix,
     render: render, toWav: toWav, exportWav: exportWav, exportMixWav: exportMixWav,
     _t: { DRUMBANK: DRUMBANK, SMP: SMP, SMAP: SMAP, ctx: function () { return P.ctx; }, Composer: Composer, Engine: Engine, LOUD: LOUD, STYLES: STYLES, RECIPES: RECIPES, KITS: KITS, STRIPS: STRIPS }

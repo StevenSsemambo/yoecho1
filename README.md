@@ -243,3 +243,7 @@ Added recorded: electric piano ("keys"), Hammond-style drawbar organ, pipe organ
 ## Kalimba, bells and choir (v11)
 
 Kalimba, bells (a recorded glockenspiel) and choir now play recordings too (FluidR3 GM, ~0.6 MB). Still synthesized on purpose: pads, sub, 808 and synth basses, risers and effects. Total sample folder is about 7 MB, all lazy-loaded with synth fallback.
+
+## Sample memory budget (v12)
+
+Decoded audio is raw floats, so all 24 banks together would need about 180 MB. Banks now decode at their own low sample rate (32 kHz; about 25% smaller, ~133 MB for everything), and a memory budget keeps the total in check: 16 MB per GB of device memory when the browser reports it (32-128 MB), otherwise 72 MB. When a new bank needs room, banks idle for more than 30 s are dropped, oldest first; if nothing can be dropped, the bank waits (retrying every 15 s) and the synthesized voice keeps playing. `EchoMusic.samples.memory()` shows usage; `EchoMusic.samples.setBudgetMB(n)` overrides the budget.
