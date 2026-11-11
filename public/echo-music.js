@@ -1318,7 +1318,7 @@
             .then(function (ab) { return ctx.decodeAudioData(ab); }).then(function (buf) { b.bufs[m] = buf; b.notes.push(m); }).then(run);
         };
         return Promise.all([run(), run(), run(), run()]);
-      }).then(function () { b.notes.sort(function (x, y) { return x - y; }); b.ready = b.notes.length > 0; if (!b.ready) throw new Error("empty"); })
+      }).then(function () { if (b.kind !== "drum") b.notes.sort(function (x, y) { return x - y; }); b.ready = b.notes.length > 0; if (!b.ready) throw new Error("empty"); })
         .catch(function () { b.failed = Date.now(); SMP.manP = null; });
     } catch (e) { b.failed = Date.now(); }
     return b;
@@ -1329,6 +1329,8 @@
     if (!b) b = smpLoad(name, ctx);
     return b.ready ? b : null;
   }
+  /* drum kit -> recorded kit (CC-BY Pearl Master Studio by enoe; public-domain LinnDrum LM-2). Kits not listed stay synthesized. */
+  var DRUMBANK = { rock: "drums-acoustic", rnr: "drums-acoustic", jazz: "drums-acoustic", reggae: "drums-acoustic", funk: "drums-acoustic", boombap: "drums-lm2" };
   /* instrument -> recording: bank, release, attack, sustained (loops), low bank for deep notes, ensemble (two detuned copies), amp-style distortion */
   var SMAP = {
     piano:   { bank: "piano", rel: .5, cost: 1 },
@@ -1734,7 +1736,7 @@
     };
 
     /* ── recorded-instrument voice: pick the nearest recorded note, repitch it with playbackRate, shape it with an envelope ── */
-    var SLOUD = { piano: 1.18, guitar: 1.14, eguitar: 1.13, lguitar: .6, dguitar: .44, ebass: 1.83, sax: 1.08, brass: .97, horns: .96, flute: 1.04, violin: 1.3, strings: 1.01 };
+    var SLOUD = { piano: 1.18, guitar: 1.14, eguitar: 1.13, lguitar: .7, dguitar: .56, ebass: 1.83, sax: 1.08, brass: .97, horns: .96, flute: 1.04, violin: 1.3, strings: 1.01 };
     function sampleVoice(E, sp, bank, f, t, d, v, o) {
       var m = smpMidi(f), root = bank.notes[0], k, bi;
       for (k = 1; k < bank.notes.length; k++) if (Math.abs(bank.notes[k] - m) < Math.abs(root - m)) root = bank.notes[k];
@@ -1790,10 +1792,33 @@
       chick: function (E, t, v, K, o) { E.playSample(E.noiseSample("chick", [{ at: 0, sec: .06, type: "bandpass", fc: 5200, q: 1.2, decay: .03, peak: .3 }]), t, v, o); },
       crash: function (E, t, v, K, o) { E.playSample(E.noiseSample("crash", [{ at: 0, sec: 2.2, type: "highpass", fc: 3500, q: .6, decay: 1.7, peak: .35 }]), t, v, o); }
     };
+
+    /* ── recorded drum hits: round-robin snares/rides/crashes, tom pitch by drum, hi-hat choke ── */
+    var DGK = {
+      "drums-acoustic": { kick: 1.15, snare: 1.05, hat: .3, open: .38, ride: .7, crash: .7, tom: .85 },
+      "drums-lm2": { kick: 1.3, snare: .55, clap: .55, hat: .3, open: .3, ride: .3, crash: .55, tom: .72, cow: .35, tamb: .3, conga: .6 }
+    }, rr = {}, lastOpen = null;
+    E.DGK = DGK;
+    function drumHit(bank, dg, name, t, v, o, ev) {
+      var ids, id, rate = 1, k;
+      if (name === "snare") ids = ["snare1", "snare2", "snare3"]; else if (name === "ride") ids = ["ride1", "ride2"]; else if (name === "crash") ids = ["crash1", "crash2"];
+      else if (name === "tom") { var n = clamp((ev && ev.n !== undefined) ? ev.n : 2, 0, 3); ids = [n === 0 ? "tom1" : n === 1 ? "tom1" : n === 2 ? "tom2" : "tom3"]; rate = [1.12, 1, 1, 1][n]; }
+      else ids = [name];
+      var have = ids.filter(function (x) { return bank.bufs[x]; }); if (!have.length) return false;
+      rr[name] = ((rr[name] || 0) + 1 + (Math.random() < .35 ? 1 : 0)) % have.length; id = have[rr[name]];
+      var src = ctx.createBufferSource(), g = ctx.createGain(); src.buffer = bank.bufs[id]; src.playbackRate.value = rate * (1 + (Math.random() - .5) * .03);
+      var vel = Math.min(1.2, v) * (dg[name] || 1) * (name === "kick" || name === "snare" ? .9 + Math.min(.3, v * .3) : 1);
+      g.gain.setValueAtTime(vel, t); src.connect(g); g.connect(o);
+      if (name === "open") { lastOpen = g; }
+      else if (name === "hat" && lastOpen) { try { lastOpen.gain.cancelScheduledValues(t); lastOpen.gain.setValueAtTime(lastOpen.gain.value, t); lastOpen.gain.linearRampToValueAtTime(0, t + .02); } catch (e) {} lastOpen = null; }
+      src.start(t); return true;
+    }
     E.drum = function (ev, t, bar) {
       var K = KITS[bar.kit] || KITS.classic, name = ev.k, strip = ev.r === "perc" ? (PERC_STRIP[name] || "hats") : "drums", o = E.strips[strip].in, vel = clamp(ev.v, .02, 1.2);
       if (ev.pan && ctx.createStereoPanner) { var pn = ctx.createStereoPanner(); pn.pan.value = clamp(ev.pan, -1, 1); pn.connect(o); o = pn; }
       if (name === "kick") kickDuck(t);
+      var db = DRUMBANK[bar.kit], bank = db && SMP.on && E.samples && ctx.decodeAudioData ? smpGet(db, ctx) : null;
+      if (bank && drumHit(bank, DGK[db] || {}, name, t, vel, o, ev)) return;
       if (DRUM[name]) DRUM[name](E, t, vel, K, o, ev);
     };
     E.fx = function (ev, t, bar) {
@@ -1867,7 +1892,7 @@
     /* where each part sits against the grid (seconds, scaled by the style's "lay-back"): kick pushes, snare and lead lean back */
     var LAY = { kick: -.004, snare: .012, clap: .012, hat: .002, open: .002, bass: .006, lead: .014, comp: .008, arp: .004 }, drift = 0;
     E.playBar = function (bar, t0) {
-      E.setMix(bar.mix, t0, bar); if (bar.palette) E.warm(bar.palette);
+      E.setMix(bar.mix, t0, bar); if (bar.palette) E.warm(bar.palette); if (DRUMBANK[bar.kit] && E.samples && SMP.on) smpGet(DRUMBANK[bar.kit], ctx);
       drift = drift * .7 + (Math.random() - .5) * .008 * (bar.human || 0);
       for (var k = 0; k < bar.events.length; k++) {
         var ev = bar.events[k], key = ev.r === "perc" ? "hats" : ev.r === "drums" ? "drums" : ev.r;
@@ -1888,7 +1913,7 @@
       Object.keys(tex).forEach(function (k) { try { tex[k].src.stop(); } catch (e) {} });
       setTimeout(function () { try { E.out.disconnect(); } catch (e) {} }, 400);
     };
-    E.INST = INST; E.DRUM = DRUM; E.SMP = SMP;
+    E.INST = INST; E.DRUM = DRUM; E.SMP = SMP; E.DRUMBANK = DRUMBANK;
     return E;
   }
 
@@ -2243,10 +2268,10 @@
     like: like, saved: saved, playSaved: playSaved, tasteSummary: tasteSummary, info: info, level: level,
     on: function (fn) { P.listeners.push(fn); return function () { API.off(fn); }; }, off: function (fn) { P.listeners = P.listeners.filter(function (x) { return x !== fn; }); },
     parseBrief: parseBrief, moods: MOOD_LIST.slice(), styles: STYLE_LIST.map(function (k) { return { id: k, name: STYLES[k].name }; }),
-    samples: { setBase: function (u) { SMP.base = u; }, enable: function (on) { SMP.on = !!on; }, enabled: function () { return SMP.on; }, status: function () { var o = {}; for (var k in SMP.banks) o[k] = SMP.banks[k].ready ? "ready" : SMP.banks[k].failed ? "failed" : "loading"; return o; }, preload: function (names) { var c = ensureCtx(); if (c) (names || Object.keys(SMAP).map(function (k) { return SMAP[k].bank; })).forEach(function (b) { smpGet(b, c); }); } },
+    samples: { setBase: function (u) { SMP.base = u; }, enable: function (on) { SMP.on = !!on; }, enabled: function () { return SMP.on; }, status: function () { var o = {}; for (var k in SMP.banks) o[k] = SMP.banks[k].ready ? "ready" : SMP.banks[k].failed ? "failed" : "loading"; return o; }, preload: function (names) { var c = ensureCtx(); if (c) (names || Object.keys(SMAP).map(function (k) { return SMAP[k].bank; }).concat(["drums-acoustic", "drums-lm2"])).forEach(function (b) { smpGet(b, c); }); } },
     mix: mix, mixNext: mixNext, mixInfo: mixInfo, buildMixPlan: buildMixPlan, renderMix: renderMix,
     render: render, toWav: toWav, exportWav: exportWav, exportMixWav: exportMixWav,
-    _t: { SMP: SMP, SMAP: SMAP, ctx: function () { return P.ctx; }, Composer: Composer, Engine: Engine, LOUD: LOUD, STYLES: STYLES, RECIPES: RECIPES, KITS: KITS, STRIPS: STRIPS }
+    _t: { DRUMBANK: DRUMBANK, SMP: SMP, SMAP: SMAP, ctx: function () { return P.ctx; }, Composer: Composer, Engine: Engine, LOUD: LOUD, STYLES: STYLES, RECIPES: RECIPES, KITS: KITS, STRIPS: STRIPS }
   };
   global.EchoMusic = API;
   if (typeof module !== "undefined" && module.exports) module.exports = API;

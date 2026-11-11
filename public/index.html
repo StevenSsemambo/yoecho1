@@ -922,13 +922,23 @@ function loadEchoMusic(){
   if(_musicPromise) return _musicPromise;
   _musicPromise=new Promise((res,rej)=>{
     const el=document.createElement("script");
-    el.src="/echo-music.js?v=12"; el.async=true;
+    el.src="/echo-music.js?v=13"; el.async=true;
     el.onload=()=>{ if(window.EchoMusic){ window.dispatchEvent(new Event("echomusic-ready")); res(window.EchoMusic); } else rej(new Error("music engine missing")); };
     el.onerror=()=>rej(new Error("could not load the music engine"));
     document.head.appendChild(el);
   }).catch(e=>{ _musicPromise=null; throw e; });
   return _musicPromise;
 }
+// Quietly pre-fetch the most-used recorded instruments (~2 MB, then cached by the service worker) a few seconds after the app opens,
+// so the first piece already plays real piano/guitar/bass/drums. Skipped on Data Saver or slow connections; the rest load on demand.
+function warmMusicSamples(){
+  try{
+    const c=navigator.connection||{};
+    if(c.saveData||/(^|-)2g$|3g/.test(c.effectiveType||"")||navigator.onLine===false) return;
+    setTimeout(()=>{ loadEchoMusic().then(M=>{ try{ M.samples&&M.samples.preload(["piano","guitar-electric","bass-electric","guitar-acoustic","drums-acoustic"]); }catch(e){} }).catch(()=>{}); }, 9000);
+  }catch(e){}
+}
+if(document.readyState==="complete") warmMusicSamples(); else window.addEventListener("load",warmMusicSamples,{once:true});
 const MUSIC_STYLES=[["afrobeats","Afrobeats"],["amapiano","Amapiano"],["lofi","Lo-fi"],["house","House"],["trap","Trap"],["rnb","R&B"],["ambient","Ambient"],["cinematic","Cinematic"],["acoustic","Acoustic"],["rocknroll","Rock and Roll"],["rock","Rock"],["blues","Blues"],["jazz","Jazz"],["reggae","Reggae"],["funk","Funk"],["pop","Pop"],["hiphop","Hip-hop"]];
 // genre words people actually say -> engine style id
 const GENRE_WORDS=[[/\b(rock\s*(?:and|n|'n'|&)\s*roll|rock\s*n\s*roll|rock-?n-?roll|rockabilly|elvis|chuck berry|1950s|fifties)\b/,"rocknroll"],[/\b(hard rock|classic rock|rock|metal|punk|grunge|guitar band)\b/,"rock"],[/\bblues(?:y)?\b/,"blues"],[/\b(jazz(?:y)?|bebop|swing|bossa)\b/,"jazz"],[/\b(reggae|ska|dancehall)\b/,"reggae"],[/\b(funk(?:y)?|disco)\b/,"funk"],[/\bpop\b/,"pop"],[/\b(hip[- ]?hop|boom ?bap|rap)\b/,"hiphop"],[/\bafro ?beats?\b/,"afrobeats"],[/\bamapiano\b/,"amapiano"],[/\blo-?fi\b/,"lofi"],[/\bhouse\b/,"house"],[/\btrap\b/,"trap"],[/\b(r&b|rnb)\b/,"rnb"],[/\bambient\b/,"ambient"],[/\bcinematic\b/,"cinematic"],[/\bacoustic\b/,"acoustic"]];

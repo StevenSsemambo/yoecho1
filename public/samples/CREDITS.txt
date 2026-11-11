@@ -11,3 +11,7 @@ MIT License - Copyright (c) 2018 Nicholaus P. Brosowsky
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated files, to deal in the
 Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies,
 subject to the inclusion of this copyright and permission notice in all copies. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+
+Drums:
+- Acoustic kit: "Pearl Master Studio Pack 1" by enoe, via oramics/sampled - Creative Commons Attribution 3.0 (https://creativecommons.org/licenses/by/3.0/). Trimmed and re-encoded.
+- LinnDrum LM-2 kit: public domain, via oramics/sampled (https://github.com/oramics/sampled).
