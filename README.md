@@ -258,3 +258,9 @@ Decoded audio is raw floats, so all 24 banks together would need about 180 MB. B
 - **The reminder job now runs every minute** (was every 2), so reminders land within about a minute.
 - **Check-ins:** older records without a saved choice get the default (every ~2 days); the daytime window is at least 7 hours; someone who opens the app often is no longer skipped forever.
 - **Delivery log:** every send attempt is recorded in the `push_log` table (kept 7 days) so "why didn't I get it?" can be answered from the database.
+
+## v14 — Composer agent: written melodies + critic loop
+- The chat model still writes the plan (key, chords, form, band, hook). A second background pass now **writes the actual melody** (verse, chorus, bridge/solo) note by note, grounded in each bar's chord tones.
+- `EchoMusic.critique(plan)` is a rule-based music critic (range, leaps, chord tones on the beat, phrase endings, repetition, verse/chorus contrast, form, energy). Score under 80 -> the model gets the critic's notes and rewrites once; the better version wins, below 45 the engine's own melody stays.
+- The piece starts immediately; the written melody lands from the next section. `EchoMusic.setMelodies`, `EchoMusic.tonesOf` are the hooks. Repeated sections reuse their melody.
+- `chat.js` accepts `maxTokens` (cap 3000) so melody replies are not truncated.

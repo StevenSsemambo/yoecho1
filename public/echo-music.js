@@ -454,6 +454,29 @@
     var base = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[m[1].toUpperCase()], acc = m[2] === "#" || m[2] === "♯" ? 1 : (m[2] === "b" || m[2] === "♭") ? -1 : 0;
     var q = chordQuality(m[3] || ""); return absChord(((base + acc - keyRoot) % 12 + 12) % 12, q);
   }
+  /* a written melody: [[bar, sixteenth, degree, length], ...] -> notes grouped by bar. Invalid notes are dropped; overlaps are trimmed. */
+  function parseMel(mel, secBars) {
+    if (!Array.isArray(mel)) return null;
+    var notes = [], i;
+    for (i = 0; i < mel.length && notes.length < 96; i++) {
+      var n = mel[i]; if (!Array.isArray(n) || n.length < 3) continue;
+      var b = Math.round(Number(n[0])), st = Math.round(Number(n[1])), dg = Math.round(Number(n[2])), ln = Math.round(Number(n[3] === undefined ? 2 : n[3]));
+      if (!isFinite(b) || !isFinite(st) || !isFinite(dg) || !isFinite(ln)) continue;
+      if (b < 0 || b >= Math.min(secBars, 16) || st < 0 || st > 15) continue;
+      notes.push({ b: b, s: st, deg: clamp(dg, -4, 14), len: clamp(ln, 1, 16) });
+    }
+    if (notes.length < 3) return null;
+    notes.sort(function (a, c) { return a.b - c.b || a.s - c.s; });
+    for (i = 0; i < notes.length; i++) {      /* one voice: a note ends where the next begins */
+      var nx = notes[i + 1], abs = notes[i].b * 16 + notes[i].s;
+      if (nx) { var gap = nx.b * 16 + nx.s - abs; if (gap <= 0) { notes.splice(i, 1); i--; continue; } if (notes[i].len > gap) notes[i].len = gap; }
+    }
+    var nb = 0; notes.forEach(function (x) { if (x.b + 1 > nb) nb = x.b + 1; });
+    nb = nb <= 1 ? 1 : nb <= 2 ? 2 : nb <= 4 ? 4 : nb <= 8 ? 8 : 16;
+    var byBar = []; for (i = 0; i < nb; i++) byBar.push([]);
+    notes.forEach(function (x) { if (x.b < nb) byBar[x.b].push({ s: x.s, deg: x.deg, len: x.len }); });
+    return { bars: nb, byBar: byBar, n: notes.length };
+  }
   function parsePlan(p) {
     if (typeof p === "string") { var t = p.replace(/```(?:json)?/gi, ""), a = t.indexOf("{"), z = t.lastIndexOf("}"); try { p = JSON.parse(t.slice(a, z + 1)); } catch (e) { return null; } }
     if (!p || typeof p !== "object" || !Array.isArray(p.sections)) return null;
@@ -470,10 +493,14 @@
       var kind = String(rs.kind || "verse").toLowerCase(); if (!PLAN_KINDS[kind]) kind = "verse";
       var lead = String(rs.lead || "theme").toLowerCase(); if (!PLAN_LEAD[lead]) lead = "theme";
       var bars = clamp(Math.round(Number(rs.bars) || chords.length), 4, 24), dr = Number(rs.drums); if (!isFinite(dr)) dr = 2;
-      out.sections.push({ kind: kind, chords: chords, bars: bars, energy: clamp(typeof rs.energy === "number" ? rs.energy : .6, .1, 1), lead: lead, drums: clamp(Math.round(dr), 0, 2),
+      var pm = parseMel(rs.mel, bars);
+      out.sections.push({ src: i, mel: pm ? pm.byBar : null, melBars: pm ? pm.bars : 0, kind: kind, chords: chords, bars: bars, energy: clamp(typeof rs.energy === "number" ? rs.energy : .6, .1, 1), lead: lead, drums: clamp(Math.round(dr), 0, 2),
         bass: rs.bass !== false, arp: rs.arp === true, comp: rs.comp !== false, fill: rs.fill !== false && kind !== "intro", crash: kind === "chorus" || kind === "drop" || kind === "solo" || rs.crash === true });
     }
     if (out.sections.length < 2) return null;
+    var sig = function (x) { return x.kind + "|" + x.chords.map(function (c) { return c.rs + c.q; }).join(); }, seen = {};   /* a repeated section plays the same written melody */
+    out.sections.forEach(function (x) { if (x.mel) { if (!seen[sig(x)]) seen[sig(x)] = x; } });
+    out.sections.forEach(function (x) { if (!x.mel && x.lead !== "none") { var o = seen[sig(x)]; if (o) { x.mel = o.mel; x.melBars = o.melBars; } } });
     if (!out.mode) { var c0 = out.sections[0].chords[0].q; out.mode = (c0 === "min" || c0 === "m7" || c0 === "m9" || c0 === "m11" || c0 === "m6") ? "aeolian" : (c0 === "7" || c0 === "9" || c0 === "13") ? "mixolydian" : "ionian"; }
     var st = String(p.style || "").toLowerCase().replace(/[^a-z]/g, ""); st = ({ rockandroll: "rocknroll", hiphop2: "hiphop" })[st] || st; out.style = STYLES[st] && !STYLES[st].solo ? st : "";
     if (typeof p.bpm === "number" && isFinite(p.bpm)) out.bpm = clamp(Math.round(p.bpm), 50, 150);
@@ -493,6 +520,88 @@
       if (ok && on.every(isFinite) && deg.every(isFinite)) out.motif = { on: on, deg: deg };
     }
     return out;
+  }
+
+
+  /* ═══════════════ the critic ═══════════════
+   * Reads a plan the way a music teacher reads a lead sheet and returns a score plus short, specific notes the composer can act on.
+   * It checks things that are measurable: range, leaps, chord-tone use on the beat, phrase endings, repetition, contrast between sections, form. */
+  function critique(src) {
+    var pl = parsePlan(src); if (!pl) return { ok: false, score: 0, issues: ["The plan could not be read."], stats: {} };
+    var sc = MODES[pl.mode] || MODES.ionian, n = sc.length, issues = [], pen = 0, stats = { sections: pl.sections.length, melodies: 0 };
+    function semi(d) { var o = Math.floor(d / n); return sc[d - o * n] + 12 * o; }
+    function note(msg, w) { issues.push(msg); pen += w; }
+    var sections = pl.sections, avgPitch = {}, i, j;
+    var chorusCount = 0, hasContrast = false, uniq = {};
+    sections.forEach(function (sx) { if (sx.kind === "chorus" || sx.kind === "drop") chorusCount++; if (/bridge|solo|break|build/.test(sx.kind)) hasContrast = true; sx.chords.forEach(function (c) { uniq[c.rs + c.q] = 1; }); });
+    if (Object.keys(uniq).length < 4) note("The harmony is too small: use at least 4 different chords across the piece.", 12);
+    if (chorusCount < 1) note("There is no chorus or drop: add a section that is the high point.", 10);
+    if (!hasContrast) note("No bridge, solo or break: add one contrasting section so the piece goes somewhere.", 6);
+    var en = sections.map(function (x) { return x.energy; }), emax = Math.max.apply(null, en), emin = Math.min.apply(null, en);
+    if (emax - emin < .3) note("The energy is flat: make intros and bridges quieter (0.3-0.5) and choruses bigger (0.8-1).", 8);
+    var firstChorus = null, firstVerse = null;
+    sections.forEach(function (sx) { if (!firstChorus && (sx.kind === "chorus" || sx.kind === "drop")) firstChorus = sx; if (!firstVerse && sx.kind === "verse") firstVerse = sx; });
+    if (firstChorus && firstVerse && firstChorus.chords.map(function (c) { return c.rs + c.q; }).join() === firstVerse.chords.map(function (c) { return c.rs + c.q; }).join()) note("The verse and the chorus use the same chords: give the chorus a different progression.", 10);
+    var last = sections[sections.length - 1]; if (last && last.kind !== "outro" && last.energy > .8) note("The ending stays at full energy: finish with a softer outro or a held final chord.", 3);
+    for (i = 0; i < sections.length; i++) {
+      var sx = sections[i]; if (!sx.mel) { if ((sx.kind === "chorus" || sx.kind === "verse") && sx.lead !== "none") note("Section " + sx.src + " (" + sx.kind + ") has no written melody.", 6); continue; }
+      stats.melodies++;
+      var seq = [], bars = sx.mel.length, strong = 0, strongOk = 0, leaps = 0, steps = 0, repeats = 0, total = 0, durs = {}, sumP = 0, bi, k;
+      for (bi = 0; bi < bars; bi++) for (k = 0; k < sx.mel[bi].length; k++) { var nt = sx.mel[bi][k]; seq.push({ b: bi, s: nt.s, p: semi(nt.deg), deg: nt.deg, len: nt.len }); }
+      var tag = "Section " + sx.src + " (" + sx.kind + "): ";
+      if (seq.length < 3) continue;
+      var lo = Math.min.apply(null, seq.map(function (x) { return x.p; })), hi = Math.max.apply(null, seq.map(function (x) { return x.p; }));
+      if (hi - lo > 19) note(tag + "the melody spans " + (hi - lo) + " semitones; keep it within about an octave and a half so it is singable.", 8);
+      if (hi - lo < 4 && seq.length > 6) note(tag + "the melody barely moves (range " + (hi - lo) + " semitones); give it a clear rise and fall.", 8);
+      for (j = 0; j < seq.length; j++) {
+        sumP += seq[j].p; durs[seq[j].len] = 1;
+        if (j > 0) { var iv = Math.abs(seq[j].p - seq[j - 1].p); total++; if (iv === 0) repeats++; else if (iv <= 2) steps++; else if (iv > 5) leaps++; if (iv > 9) note(tag + "a leap of " + iv + " semitones before bar " + (seq[j].b + 1) + " is too large.", 3); }
+        if (seq[j].s % 4 === 0) {
+          strong++; var ch = sx.chords[(seq[j].b) % sx.chords.length], pcs = ch.abs.map(function (x) { return (ch.rs + x) % 12; });
+          if (pcs.indexOf(((seq[j].p % 12) + 12) % 12) >= 0) strongOk++;
+        }
+      }
+      avgPitch[i] = sumP / seq.length;
+      if (total) {
+        if (leaps / total > .3) note(tag + "too many leaps (" + Math.round(100 * leaps / total) + "%); mostly use steps with an occasional jump.", 7);
+        if (repeats / total > .4) note(tag + "too many repeated notes (" + Math.round(100 * repeats / total) + "%); vary the pitches.", 6);
+        if (steps / total < .25 && total > 5) note(tag + "very few stepwise moves; a singable tune moves mostly by step.", 4);
+      }
+      if (strong >= 3 && strongOk / strong < .5) note(tag + "only " + Math.round(100 * strongOk / strong) + "% of the notes on the beat are chord tones; the melody clashes with the chords.", 9);
+      var lastN = seq[seq.length - 1], lch = sx.chords[lastN.b % sx.chords.length], lp = lch.abs.map(function (x) { return (lch.rs + x) % 12; });
+      if (lp.indexOf(((lastN.p % 12) + 12) % 12) < 0) note(tag + "the melody ends on a note that is not in the final chord; end the phrase on a chord tone (root, 3rd or 5th).", 6);
+      var perBar = seq.length / bars; if (perBar > 12) note(tag + "too busy (" + perBar.toFixed(1) + " notes per bar); leave space to breathe.", 5); if (perBar < 1.5 && bars >= 2) note(tag + "very sparse (" + perBar.toFixed(1) + " notes per bar).", 3);
+      if (Object.keys(durs).length < 2 && seq.length > 5) note(tag + "every note has the same length; mix long and short notes for a rhythm with character.", 5);
+      if (bars >= 4) { var sigs = {}; for (bi = 0; bi < bars; bi++) sigs[sx.mel[bi].map(function (x) { return x.s + ":" + x.deg; }).join()] = 1; if (Object.keys(sigs).length === 1) note(tag + "every bar is identical; develop the idea (answer it, vary the end, go higher).", 7); }
+    }
+    var ci = sections.indexOf(firstChorus), vi = sections.indexOf(firstVerse);
+    if (ci >= 0 && vi >= 0 && avgPitch[ci] !== undefined && avgPitch[vi] !== undefined && avgPitch[ci] < avgPitch[vi] + 1) note("The chorus melody should sit higher than the verse melody so it lifts.", 6);
+    var score = Math.max(0, Math.min(100, 100 - pen));
+    return { ok: true, score: score, issues: issues.slice(0, 8), stats: stats };
+  }
+  /* what a melody writer needs to see: for every chord, which scale degrees are its notes (safe on the beat) */
+  function tonesOf(src) {
+    var pl = parsePlan(src); if (!pl) return null; var sc = MODES[pl.mode] || MODES.ionian;
+    return { key: ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"][pl.key], mode: pl.mode, scale: sc.length,
+      sections: pl.sections.map(function (sx) {
+        return { src: sx.src, kind: sx.kind, bars: sx.bars, lead: sx.lead, chords: sx.chords.map(function (c) {
+          var t = []; c.abs.forEach(function (x) { var i = sc.indexOf((c.rs + x) % 12); if (i >= 0 && t.indexOf(i) < 0) t.push(i); }); return t; }) };
+      }) };
+  }
+  /* put (or replace) written melodies into the plan that is playing; they take effect from the next section */
+  function setMelodies(map) {
+    var pc = P.piece; if (!pc || !pc.comp || !pc.comp.spec || !pc.comp.spec.plan || !map) return 0;
+    var plan = pc.comp.spec.plan, raw = P.lastBrief && (P.lastBrief.planSrc || P.lastBrief.plan), done = 0;
+    plan.sections.forEach(function (ps) {
+      var m = map[ps.src]; if (m === undefined) return;
+      var pm = m === null ? null : parseMel(m, ps.bars); if (m !== null && !pm) return;
+      ps.mel = pm ? pm.byBar : null; ps.melBars = pm ? pm.bars : 0; done++;
+      if (raw && typeof raw === "object" && Array.isArray(raw.sections) && raw.sections[ps.src]) { if (m === null) delete raw.sections[ps.src].mel; else raw.sections[ps.src].mel = m; }
+    });
+    var sg = function (x) { return x.kind + "|" + x.chords.map(function (c) { return c.rs + c.q; }).join(); }, sn = {};
+    plan.sections.forEach(function (x) { if (x.mel && !sn[sg(x)]) sn[sg(x)] = x; });
+    plan.sections.forEach(function (x) { if (!x.mel && x.lead !== "none" && sn[sg(x)]) { x.mel = sn[sg(x)].mel; x.melBars = sn[sg(x)].melBars; } });
+    return done;
   }
 
   /* ═══════════════ brief -> spec ═══════════════ */
@@ -781,9 +890,24 @@
     }
     function fam(name) { var m = INSTR_META[name]; return m ? m.fam : "synth"; }
 
+    /* plays the melody the composer wrote, exactly, with a player's touch: accents on the beat, an arch across the phrase, breath at phrase ends, small slides */
+    function melBar(sec) {
+      var out = [], bi = S.secBar % sec.melBars, notes = sec.mel[bi] || [], orig = leadOrigin(), lf = fam(S.pal.lead), artic = ARTIC[lf] || .8, v0 = BASE_VEL.lead * sec.dyn, glidy = lf !== "pluck" && lf !== "mallet" && lf !== "keys";
+      var lift = (sec.lift && sec.loop > 0 && (sec.loop % 2) === 1) ? lscale().length : 0, pb = S.secBar % 4, prevM = null, n = lscale().length;
+      for (var k = 0; k < notes.length; k++) {
+        var nt = notes[k], deg = clamp(nt.deg + lift, -4, n * 2 + 2), nm = orig + ls(deg), phraseEnd = (bi === sec.melBars - 1 && k === notes.length - 1);
+        var contour = .9 + .16 * Math.sin(Math.PI * (pb * 16 + nt.s) / 64), accent = nt.s % 4 === 0 ? 1 : nt.s % 2 === 0 ? .88 : .8;
+        var d = Math.max(1, nt.len * artic * (phraseEnd ? 1.15 : .96 + rng() * .08));
+        var ev = { s: nt.s, r: "lead", i: S.pal.lead, m: nm, d: d, v: v0 * accent * contour * (1 + (rng() - .5) * .1), p: 1 };
+        if (glidy && prevM !== null && prevM !== nm && Math.abs(prevM - nm) <= 3 && nt.len >= 2 && rng.chance(.25)) ev.gl = prevM - nm;
+        out.push(ev); prevM = nm;
+      }
+      return out;
+    }
     function leadBar(sec, chord, ci, cb) {
       var mode = sec.lead, out = [];
       if (!S.pal.lead) return out;
+      if (sec.mel && mode !== "none") return melBar(sec);
       if (S.style.leadGen && (mode === "theme" || mode === "varied" || mode === "call")) return genLead(sec, chord, ci, cb, mode);
       if (SOLO && !SOLO.poly && (mode === "call" || (mode === "sparse" && sec.kind !== "intro" && sec.kind !== "bridge"))) mode = "theme";
       if (mode === "none") return out;
@@ -829,7 +953,7 @@
     function lo56(x) { return x < 56 ? x + 12 : x; }
     /* the second voice answers the lead's call: on the bars where the lead rests, it plays the cadence of the theme a step lower */
     function answerBar(sec, chord, pb) {
-      var out = []; if (!S.pal.ans || !sec.layers.ans || sec.lead !== "call" || (pb % 2) !== 1 || S.style.leadGen) return out;
+      var out = []; if (!S.pal.ans || !sec.layers.ans || sec.mel || sec.lead !== "call" || (pb % 2) !== 1 || S.style.leadGen) return out;
       var pcs = chordPcs(chord), mm = S.theme.m[pb === 1 ? 3 : 2], c = LEAD_CENTER[S.pal.ans] || 66, orig = placeInRange(S.root, c - 14, c - 3);
       var v0 = BASE_VEL.lead * sec.dyn * .7, art = ARTIC[fam(S.pal.ans)] || .8, half = Math.max(2, Math.ceil(mm.on.length * .7));
       for (var k = 0; k < half && k < mm.on.length; k++) {
@@ -1151,6 +1275,7 @@
         layers: { comp: S.style.solo ? true : tpl.k === "intro" ? rng.chance(.55) : tpl.k === "break" ? rng.chance(.8) : true, bass: !!tpl.bass && e >= .15, drums: dl, arp: rng.chance(tpl.arp * (.5 + e * .7)) },
         compVar: rng.int(4), bassVar: rng.int(6), drumVar: rng.int(4), loop: 0, ans: false
       };
+      if (ps && ps.mel) { S.sec.mel = ps.mel; S.sec.melBars = ps.melBars; }
       if (ps) { S.sec.layers.comp = ps.comp; S.sec.layers.arp = ps.arp && !!S.pal.arp; S.sec.layers.bass = ps.bass && e >= .15; S.sec.loop = 0; }
       if (tpl.k === "intro" && S.style.drums === 2 && !S.sec.layers.comp && !ps) S.sec.layers.arp = true;
       S.sec.layers.ans = !!S.pal.ans && rng.chance(.25 + .55 * e);
@@ -2307,11 +2432,11 @@
     current: function () { var pc = P.piece; if (!pc || !P.lastBrief) return null; var b = {}; for (var k in P.lastBrief) b[k] = P.lastBrief[k]; b.seed = pc.seed; return b; },
     like: like, saved: saved, playSaved: playSaved, tasteSummary: tasteSummary, info: info, level: level,
     on: function (fn) { P.listeners.push(fn); return function () { API.off(fn); }; }, off: function (fn) { P.listeners = P.listeners.filter(function (x) { return x !== fn; }); },
-    parseBrief: parseBrief, moods: MOOD_LIST.slice(), styles: STYLE_LIST.map(function (k) { return { id: k, name: STYLES[k].name }; }),
+    critique: critique, setMelodies: setMelodies, tonesOf: tonesOf, parseBrief: parseBrief, moods: MOOD_LIST.slice(), styles: STYLE_LIST.map(function (k) { return { id: k, name: STYLES[k].name }; }),
     samples: { setBase: function (u) { SMP.base = u; }, memory: function () { return { mb: +(smpBytes() / 1048576).toFixed(1), budgetMB: +(smpBudget() / 1048576).toFixed(0), banks: Object.keys(SMP.banks).filter(function (k) { return SMP.banks[k].ready; }).length }; }, setBudgetMB: function (n) { SMP.budgetMB = n; }, enable: function (on) { SMP.on = !!on; }, enabled: function () { return SMP.on; }, status: function () { var o = {}; for (var k in SMP.banks) o[k] = SMP.banks[k].ready ? "ready" : SMP.banks[k].failed ? "failed" : "loading"; return o; }, preload: function (names) { var c = ensureCtx(); if (c) (names || Object.keys(SMAP).map(function (k) { return SMAP[k].bank; }).concat(["drums-acoustic", "drums-lm2"])).forEach(function (b) { smpGet(b, c); }); } },
     mix: mix, mixNext: mixNext, mixInfo: mixInfo, buildMixPlan: buildMixPlan, renderMix: renderMix,
     render: render, toWav: toWav, exportWav: exportWav, exportMixWav: exportMixWav,
-    _t: { DRUMBANK: DRUMBANK, SMP: SMP, SMAP: SMAP, ctx: function () { return P.ctx; }, Composer: Composer, Engine: Engine, LOUD: LOUD, STYLES: STYLES, RECIPES: RECIPES, KITS: KITS, STRIPS: STRIPS }
+    _t: { parsePlan: parsePlan, DRUMBANK: DRUMBANK, SMP: SMP, SMAP: SMAP, ctx: function () { return P.ctx; }, Composer: Composer, Engine: Engine, LOUD: LOUD, STYLES: STYLES, RECIPES: RECIPES, KITS: KITS, STRIPS: STRIPS }
   };
   global.EchoMusic = API;
   if (typeof module !== "undefined" && module.exports) module.exports = API;

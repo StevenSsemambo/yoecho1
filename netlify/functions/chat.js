@@ -48,6 +48,7 @@ const GEMINI_TIMEOUT = Number(process.env.GEMINI_TIMEOUT_MS) || 6000;
 const GROQ_TIMEOUT = Number(process.env.GROQ_TIMEOUT_MS) || 4000;
 // Newer models spend part of this budget "thinking", so keep it generous.
 const MAX_TOKENS = Number(process.env.MAX_OUTPUT_TOKENS) || 1500;
+let REQ_TOKENS = MAX_TOKENS;   // per-request override (music plans need room for a written melody)
 const TEMPERATURE = 0.85;
 
 // Stop trying more models once we're close to Netlify's ~10s function limit.
@@ -105,7 +106,7 @@ async function callGemini(model, messages, system, capMs) {
 
   const body = {
     contents: toGeminiContents(messages),
-    generationConfig: { maxOutputTokens: MAX_TOKENS, temperature: TEMPERATURE },
+    generationConfig: { maxOutputTokens: REQ_TOKENS, temperature: TEMPERATURE },
   };
   if (system) body.systemInstruction = { parts: [{ text: system }] };
 
@@ -155,7 +156,7 @@ async function callGroq(model, messages, system, capMs) {
       body: JSON.stringify({
         model,
         messages: msgs,
-        max_tokens: MAX_TOKENS,
+        max_tokens: REQ_TOKENS,
         temperature: TEMPERATURE,
       }),
     },
@@ -212,6 +213,7 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: "Invalid JSON" }) };
   }
   const { messages, system } = payload;
+  REQ_TOKENS = Math.min(3000, Math.max(MAX_TOKENS, Number(payload.maxTokens) || 0));
   if (!Array.isArray(messages) || messages.length === 0) {
     return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: "messages array required" }) };
   }

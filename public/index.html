@@ -972,7 +972,7 @@ function loadEchoMusic(){
   if(_musicPromise) return _musicPromise;
   _musicPromise=new Promise((res,rej)=>{
     const el=document.createElement("script");
-    el.src="/echo-music.js?v=16"; el.async=true;
+    el.src="/echo-music.js?v=17"; el.async=true;
     el.onload=()=>{ if(window.EchoMusic){ window.dispatchEvent(new Event("echomusic-ready")); res(window.EchoMusic); } else rej(new Error("music engine missing")); };
     el.onerror=()=>rej(new Error("could not load the music engine"));
     document.head.appendChild(el);
@@ -1103,13 +1103,68 @@ REVISION MODE: the user message is JSON with "change" (what the listener wants c
 async function reviseMusicPlan(cur,info,ask){
   try{
     const ctl=new AbortController(), to=setTimeout(()=>ctl.abort(),9500);
-    const base=cur&&cur.planSrc?{currentPlan:cur.planSrc}:{currentPiece:{style:(info&&info.style)||"",key:(info&&info.key)||"",bpm:(info&&info.bpm)||0,mood:(info&&info.mood)||"neutral",band:(info&&info.palette)||{}}};
+    const base=cur&&cur.planSrc?{currentPlan:stripMel(cur.planSrc)}:{currentPiece:{style:(info&&info.style)||"",key:(info&&info.key)||"",bpm:(info&&info.bpm)||0,mood:(info&&info.mood)||"neutral",band:(info&&info.palette)||{}}};
     const res=await fetch("/.netlify/functions/chat",{method:"POST",headers:{"Content-Type":"application/json"},signal:ctl.signal,
       body:JSON.stringify({system:PLAN_SYSTEM+REVISE_ADDENDUM,messages:[{role:"user",content:JSON.stringify({change:String(ask||"").slice(0,300),...base})}]})});
     clearTimeout(to); if(!res.ok) return null;
     const d=await res.json(), t=String(d.text||""), a=t.indexOf("{"), z=t.lastIndexOf("}"); if(a<0||z<a) return null;
     const plan=JSON.parse(t.slice(a,z+1)); return plan&&Array.isArray(plan.sections)&&plan.sections.length>=2?plan:null;
   }catch(e){ return null; }
+}
+
+// ── MELODY WRITER + CRITIC: a second pass writes the tune note by note, a rule-based critic marks it, and the composer revises once ──
+const MELODY_SYSTEM=`You are a gifted songwriter writing the MELODY for sections of a piece whose chords are already fixed. Return ONE JSON object and nothing else: {"mel":{"<sectionIndex>":[[bar,step,degree,length],...]}}.
+Each note is [bar, step, degree, length]: bar = 0-based bar inside the section (write 2 or 4 bars; they loop), step = sixteenth position in the bar (0-15; beats are 0,4,8,12), degree = scale degree of the key and mode (0 = key note, 1 = next scale note up, 7 = the octave, -1 and -2 are below), length = sixteenths the note lasts.
+You are given, for every bar, the scale degrees of that bar's chord ("tones"). Put chord tones on strong beats (steps 0, 4, 8, 12) and use the other degrees as passing notes between them.
+Write like a real songwriter:
+- Build each section from a 1-bar idea, then answer it: bar 2 repeats the idea, changed at the end; bar 3 climbs or leaps to the section's high point; bar 4 falls and resolves to a chord tone (the key note, 2 or 4 are best).
+- Mostly stepwise motion with one or two leaps that step back. Keep the range within about 9 scale degrees. No leap larger than a 5th.
+- Verse: lower, conversational, more rests. Chorus: higher (peak around degree 7-9), longer notes at the top, the hook repeated. Bridge or solo: new material, a fresh contour.
+- Rhythm: mix long and short notes, put some notes just off the beat (steps 2, 6, 10, 14), leave a rest or a long note at the end of each phrase. 3 to 9 notes per bar.
+- The chorus melody must be clearly different from the verse melody, and should be the most memorable thing in the piece.
+If the message contains "critic" notes and a "previous" melody, rewrite the melody to fix exactly those problems and keep what already works. Never explain.`;
+async function aiJson(system,payload,ms,tokens){
+  try{
+    const ctl=new AbortController(), to=setTimeout(()=>ctl.abort(),ms||12000);
+    const res=await fetch("/.netlify/functions/chat",{method:"POST",headers:{"Content-Type":"application/json"},signal:ctl.signal,
+      body:JSON.stringify({system,maxTokens:tokens||2000,messages:[{role:"user",content:JSON.stringify(payload)}]})});
+    clearTimeout(to); if(!res.ok) return null;
+    const d=await res.json(), t=String(d.text||""), a=t.indexOf("{"), z=t.lastIndexOf("}"); if(a<0||z<a) return null;
+    return JSON.parse(t.slice(a,z+1));
+  }catch(e){ return null; }
+}
+function stripMel(plan){ const c=JSON.parse(JSON.stringify(plan)); (c.sections||[]).forEach(x=>{ if(x&&typeof x==="object") delete x.mel; }); return c; }
+function melTargets(an){
+  const out=[]; let v=false,c=false,o=false;
+  (an&&an.sections||[]).forEach(s=>{ if(s.lead==="none") return;
+    if(s.kind==="verse"&&!v){ v=true; out.push(s); } else if((s.kind==="chorus"||s.kind==="drop")&&!c){ c=true; out.push(s); }
+    else if((s.kind==="bridge"||s.kind==="solo"||s.kind==="head")&&!o){ o=true; out.push(s); } });
+  return out;
+}
+function withMel(plan,map){ const c=JSON.parse(JSON.stringify(plan)); for(const k in map){ const sx=c.sections&&c.sections[k]; if(sx) sx.mel=map[k]; } return c; }
+async function fetchMelodies(an,targets,extra){
+  const payload={key:an.key,mode:an.mode,scaleLength:an.scale,sections:targets.map(s=>({index:s.src,kind:s.kind,bars:Math.min(s.bars,s.kind==="verse"||s.kind==="chorus"?4:4),
+    tones:s.chords.slice(0,4)})),...(extra||{})};
+  const r=await aiJson(MELODY_SYSTEM,payload,12000,2200);
+  return r&&r.mel&&typeof r.mel==="object"?r.mel:null;
+}
+// Background: the piece starts at once with the engine's own hook; the written melody lands from the next section on.
+async function polishMelody(plan){
+  try{
+    const M=window.EchoMusic; if(!M||!M.critique||!M.tonesOf||!M.setMelodies||!plan||typeof plan!=="object") return;
+    const base=stripMel(plan), an=M.tonesOf(base); if(!an) return;
+    const targets=melTargets(an); if(!targets.length) return;
+    let best=await fetchMelodies(an,targets); if(!best) return;
+    let res=M.critique(withMel(base,best));
+    if(res.ok&&res.score<80&&res.issues.length){
+      const again=await fetchMelodies(an,targets,{critic:res.issues,previous:best});
+      if(again){ const r2=M.critique(withMel(base,again)); if(r2.ok&&r2.score>res.score){ best=again; res=r2; } }
+    }
+    if(!res.ok||res.score<45) return;                      /* not good enough: keep the engine's own melody */
+    const cur=M.current&&M.current(); if(!cur||(cur.planSrc!==plan&&cur.plan!==plan)) return;   /* the listener moved on */
+    M.setMelodies(best);
+    try{ window.__lastMelodyScore=res.score; }catch(e){}
+  }catch(e){}
 }
 // Runs a music command. Returns a small descriptor that the chat shows as a card or a chip.
 async function runMusic(cmd,curMood){
@@ -1147,11 +1202,11 @@ async function runMusic(cmd,curMood){
     if(!cur||cur.solo||cur.drums) return {error:"I can rewrite band pieces, not solos or drum solos. Ask for a new piece instead."};
     const np=await reviseMusicPlan(cur,inf,ask);
     if(!np) return {error:"I couldn't rewrite it just now — try again in a moment, or ask for something simpler like a different energy or key."};
-    const nb={mood:cur.mood,intent:cur.intent,plan:np,seed:cur.seed}; const i2=M.play(nb);
+    const nb={mood:cur.mood,intent:cur.intent,plan:np,seed:cur.seed}; const i2=M.play(nb); if(i2) polishMelody(np);
     return i2?{chip:"REWRITTEN · "+ask.slice(0,34).toUpperCase()}:{error:"I couldn't apply that change."};
   }
   if(c==="next"){ const cur=M.current&&M.current(); let np=null; if(cur&&!cur.solo&&!cur.drums) np=await fetchMusicPlan(cmd.ask||"another piece, clearly different from the last: new key, new chord progression, new feel",cur.mood,cur.style);
-    if(np&&cur){ const nb={mood:cur.mood,intent:cur.intent,plan:np}; const i2=M.play(nb); if(i2) return {info:i2,brief:M.current()}; }
+    if(np&&cur){ const nb={mood:cur.mood,intent:cur.intent,plan:np}; const i2=M.play(nb); if(i2){ polishMelody(np); return {info:i2,brief:M.current()}; } }
     const i=M.next(); return i?{info:i,brief:M.current()}:{error:"Nothing to skip yet — tell me what you'd like to hear."}; }
   if(c==="steer"){
     if(!act) return {error:"Nothing is playing yet — ask me to play something first."};
@@ -1173,6 +1228,7 @@ async function runMusic(cmd,curMood){
   // the chat model writes a composition plan (chords, sections, band, hook); if it is slow or invalid the built-in composer plays instead
   let plan=null; if(typeof cmd.solo!=="string"&&cmd.plan!==false) plan=await fetchMusicPlan(cmd.ask,mood,cmd.style);
   const i=M.play({mood,intent:cmd.intent,style:cmd.style,solo:typeof cmd.solo==="string"?cmd.solo:undefined,energy:typeof cmd.energy==="number"?cmd.energy:undefined,plan:plan||undefined});
+  if(i&&plan) polishMelody(plan);
   return i?{info:i,brief:M.current(),note:cmd.note||""}:{error:"I couldn't start the music."};
 }
 function useMusicInfo(){
