@@ -111,4 +111,9 @@ function nextDue(due, repeat, tz) {
   return zonedToUtc(p.y, p.mo, p.d + 1, p.h, p.mi, tz);
 }
 
-module.exports = { sb, upsert, vapid, sendPush, encryptPayload, vapidHeader, zoneParts, zonedToUtc, nextDue, safeTz, b64u, fromB64u };
+// delivery log (best effort, never throws): one row per send attempt so "why didn't I get it?" can be answered from the database
+async function logPush(rows) {
+  try { if (rows && rows.length) await sb("push_log", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(rows) }); } catch (e) { console.error("[push_log]", e.message); }
+}
+
+module.exports = { logPush, sb, upsert, vapid, sendPush, encryptPayload, vapidHeader, zoneParts, zonedToUtc, nextDue, safeTz, b64u, fromB64u };

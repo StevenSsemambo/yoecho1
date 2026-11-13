@@ -2,7 +2,7 @@
 // v8 — bumped for the body-language update (gestures, hands, expressions). The face files (/echo-face.js, /vendor/*, /avatars/*) are
 // downloaded the first time someone opens Face to face, then cached by the cache-first rule
 // below so the face keeps working offline. They are not precached, to save mobile data.
-const CACHE_NAME = "yoecho-pwa-v32";
+const CACHE_NAME = "yoecho-pwa-v33";
 
 const PRECACHE_ASSETS = [
   "/",
@@ -84,8 +84,12 @@ self.addEventListener("push", (event) => {
   const title = d.title || "YoEcho";
   event.waitUntil((async () => {
     const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    // if YoEcho is open and in front, show it inside the app instead of as a system notification
-    if (wins.some((c) => c.visibilityState === "visible") && d.kind !== "test") { wins.forEach((c) => c.postMessage({ type: "echo-push", data: d })); return; }
+    // If YoEcho is open and the person is actually looking at it, show it inside the app. A "visible" window is not always in front (split screen,
+    // a phone that just locked), so reminders are ALWAYS also posted as a real notification, and everything else only skips it when the window has focus.
+    const seeing = wins.some((c) => c.visibilityState === "visible");
+    const focused = wins.some((c) => c.visibilityState === "visible" && c.focused);
+    if (seeing && d.kind !== "test") wins.forEach((c) => c.postMessage({ type: "echo-push", data: d }));
+    if (focused && d.kind !== "test" && d.kind !== "reminder") return;
     await self.registration.showNotification(title, {
       body: d.body || "I have something for you.", icon: "/icons/icon-192.png", badge: "/icons/icon-192.png",
       tag: d.tag || d.kind || "yoecho", renotify: true, vibrate: [90, 40, 90], data: d,

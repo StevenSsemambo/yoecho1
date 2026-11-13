@@ -247,3 +247,14 @@ Kalimba, bells (a recorded glockenspiel) and choir now play recordings too (Flui
 ## Sample memory budget (v12)
 
 Decoded audio is raw floats, so all 24 banks together would need about 180 MB. Banks now decode at their own low sample rate (32 kHz; about 25% smaller, ~133 MB for everything), and a memory budget keeps the total in check: 16 MB per GB of device memory when the browser reports it (32-128 MB), otherwise 72 MB. When a new bank needs room, banks idle for more than 30 s are dropped, oldest first; if nothing can be dropped, the bank waits (retrying every 15 s) and the synthesized voice keeps playing. `EchoMusic.samples.memory()` shows usage; `EchoMusic.samples.setBudgetMB(n)` overrides the budget.
+
+## Reminders and check-ins: reliability fixes (v13)
+
+- **Reminders can no longer be lost on the way to the server.** They go through an outbox (kept in the phone's storage) that retries until the server confirms, and deletes/moves keep their order.
+- **Silent failures now speak up.** If notifications are off or blocked on a phone, the reminder confirmation says it can only fire while the app is open.
+- **Self-healing push record.** On every app start (and every 30 min while open) the app re-saves this phone's subscription, recreating it if the browser dropped it or it was made for another server key.
+- **Wider reminder phrasing** ("wake me at 6", "ping me at 4 to…", "reminder: …") is caught even when the model forgets its tag.
+- **Reminders always show a real notification**, even if the app window is technically visible.
+- **The reminder job now runs every minute** (was every 2), so reminders land within about a minute.
+- **Check-ins:** older records without a saved choice get the default (every ~2 days); the daytime window is at least 7 hours; someone who opens the app often is no longer skipped forever.
+- **Delivery log:** every send attempt is recorded in the `push_log` table (kept 7 days) so "why didn't I get it?" can be answered from the database.

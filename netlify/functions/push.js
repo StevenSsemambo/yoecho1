@@ -19,7 +19,9 @@ exports.handler = async (event) => {
       case "config": { const v = await L.vapid(); return ok({ ready: true, publicKey: v.publicKey }); }
       case "subscribe": {
         const s = b.subscription || {}; if (!pid || !s.endpoint || !s.keys || !s.keys.p256dh || !s.keys.auth) return bad(400, "bad subscription");
-        const prefs = b.prefs && typeof b.prefs === "object" ? b.prefs : {};
+        let prefs = b.prefs && typeof b.prefs === "object" ? b.prefs : {};
+        // re-subscribing (the app does it quietly on every start to heal a stale record) must not reshuffle the person's saved choices or their check-in hour
+        try { const ex = await L.sb(`push_subs?endpoint=eq.${encodeURIComponent(s.endpoint)}&select=prefs`); if (ex && ex.length) prefs = Object.assign({}, ex[0].prefs || {}, prefs, { hour: (ex[0].prefs && ex[0].prefs.hour) || prefs.hour }); } catch (e) {}
         if (!prefs.hour) prefs.hour = 10 + Math.floor(Math.random() * 8);
         await L.upsert("push_subs", [{ endpoint: s.endpoint, profile_id: pid, p256dh: s.keys.p256dh, auth: s.keys.auth, tz: L.safeTz(b.tz || "UTC"), prefs, last_seen: new Date().toISOString() }], "endpoint");
         return ok({ subscribed: true, hour: prefs.hour });

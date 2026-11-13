@@ -40,6 +40,6 @@
   [headers.values]
     Cache-Control = "public, max-age=86400"
 
-# Reminders + check-in notifications: runs every 2 minutes
+# Reminders + check-in notifications: runs every minute
 [functions."push-cron"]
-  schedule = "*/2 * * * *"
+  schedule = "* * * * *"

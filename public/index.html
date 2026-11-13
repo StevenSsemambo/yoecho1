@@ -581,8 +581,40 @@ function stripReminder(t){ return String(t||"").replace(/\n?REMINDER:\{[^\n]*\}[
 const newRemId=()=>{ try{ if(crypto.randomUUID) return crypto.randomUUID(); }catch(e){} return Date.now().toString(36)+Math.random().toString(36).slice(2,9); };
 function pushOn(){ try{ return localStorage.getItem(PUSH_KEY)==="1"; }catch(e){ return false; } }
 async function pushApi(body){ const r=await fetch("/.netlify/functions/push",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); return r.json(); }
-function remServerUpsert(pid,rems,reset){ if(!pid||!pushOn()||!rems.length) return; pushApi({action:"reminder_upsert",profileId:pid,reset:!!reset,reminders:rems.map(r=>({id:r.id,title:r.title,at:r.at,repeat:r.repeat,tz:r.tz||remTz(),done:!!r.done}))}).catch(()=>{}); }
-function remServerDelete(pid,id){ if(!pid||!pushOn()) return; pushApi({action:"reminder_delete",profileId:pid,id}).catch(()=>{}); }
+// Reminders reach the server through an outbox: nothing is dropped if the network, the server or the phone hiccups; it retries until the server confirms.
+const REM_OUTBOX="yoecho_rem_outbox";
+function outboxGet(){ try{ return JSON.parse(localStorage.getItem(REM_OUTBOX)||"[]"); }catch(e){ return []; } }
+function outboxSet(a){ try{ localStorage.setItem(REM_OUTBOX,JSON.stringify(a.slice(-100))); }catch(e){} }
+let _outFlushing=false, _outTries=0;
+async function flushRemOutbox(){
+  if(_outFlushing||!pushOn()) return; if(!outboxGet().length) return;
+  _outFlushing=true; let failed=false;
+  try{
+    for(const it of outboxGet()){
+      try{
+        const r=it.op==="delete" ? await pushApi({action:"reminder_delete",profileId:it.pid,id:it.id}) : await pushApi({action:"reminder_upsert",profileId:it.pid,reset:!!it.reset,reminders:it.rems});
+        if(!r||r.error||r.ready===false) throw new Error((r&&r.error)||"no answer");
+        outboxSet(outboxGet().filter(x=>x.k!==it.k));
+      }catch(e){ failed=true; break; }          // keep the order: an upsert must land before a later delete of the same reminder
+    }
+  } finally { _outFlushing=false; }
+  if(failed){ _outTries++; setTimeout(flushRemOutbox,Math.min(60000,2000*Math.pow(2,Math.min(_outTries,5)))); } else _outTries=0;
+}
+function remServerUpsert(pid,rems,reset){
+  if(!pid||!pushOn()||!rems.length) return;
+  const items=rems.map(r=>({id:r.id,title:r.title,at:r.at,repeat:r.repeat,tz:r.tz||remTz(),done:!!r.done}));
+  const q=outboxGet(); q.push({k:newRemId(),op:"upsert",pid,reset:!!reset,rems:items}); outboxSet(q); flushRemOutbox();
+}
+function remServerDelete(pid,id){ if(!pid||!pushOn()) return; const q=outboxGet(); q.push({k:newRemId(),op:"delete",pid,id}); outboxSet(q); flushRemOutbox(); }
+// Tells the person up front when a reminder can only fire while the app is open (this was silent before, which looked like "sometimes it doesn't work")
+function pushWarning(){
+  try{
+    if(!("Notification" in window)||!("serviceWorker" in navigator)) return "This browser can't send notifications, so I can only remind you while YoEcho is open.";
+    if(Notification.permission==="denied") return "Notifications are blocked for YoEcho in your phone or browser settings, so I can only remind you while the app is open.";
+    if(!pushOn()) return "Notifications aren't turned on on this phone yet, so I can only remind you while YoEcho is open. Turn them on in menu → Reminders.";
+  }catch(e){}
+  return "";
+}
 function addReminder(pid,title,at,repeat){
   const r={id:newRemId(),title:String(title).trim().slice(0,160),at:new Date(at).toISOString(),repeat:["daily","weekly","weekdays","weekends"].includes(repeat)?repeat:"none",tz:remTz(),done:false};
   const l=Rem.list(); l.push(r); Rem.save(l); remServerUpsert(pid,[r],true); return r;
@@ -659,6 +691,22 @@ const PushX={
     PushX.savePrefs(prefs); try{ localStorage.setItem(PUSH_KEY,"1"); }catch(e){}
     remServerUpsert(pid,Rem.pending()); return true;
   },
+  /* Quietly keeps this phone's notification record healthy: re-creates a subscription the browser dropped or that was made for a different server key,
+     re-saves it on the server (also fixes a record that was removed or points at another profile), and brings the name and time zone up to date. */
+  async heal(pid,name){
+    try{
+      if(!pid||!PushX.supported()||Notification.permission!=="granted") return;
+      const reg=await navigator.serviceWorker.ready; let s=await reg.pushManager.getSubscription();
+      if(!pushOn()&&!s) return;                                   // never opted in on this device: leave it alone
+      const cfg=await pushApi({action:"config"}); if(!cfg||!cfg.ready||!cfg.publicKey) return;
+      const want=urlB64(cfg.publicKey);
+      if(s&&s.options&&s.options.applicationServerKey){ const have=new Uint8Array(s.options.applicationServerKey); if(have.length!==want.length||have.some((v,i)=>v!==want[i])){ try{ await s.unsubscribe(); }catch(e){} s=null; } }
+      if(!s) s=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:want});
+      const old=PushX.prefs(), prefs=Object.assign({checkins:"few"},old,{name:String(name||old.name||"").trim().split(" ")[0]});
+      const r=await pushApi({action:"subscribe",profileId:pid,subscription:s.toJSON(),tz:remTz(),prefs});
+      if(r&&r.subscribed){ PushX.savePrefs(prefs); try{ localStorage.setItem(PUSH_KEY,"1"); }catch(e){} }
+    }catch(e){}
+  },
   async disable(){ try{ const s=await PushX.sub(); if(s){ await pushApi({action:"unsubscribe",endpoint:s.endpoint}).catch(()=>{}); await s.unsubscribe(); } }catch(e){} try{ localStorage.removeItem(PUSH_KEY); }catch(e){} },
   async setPrefs(p){ const prefs=Object.assign(PushX.prefs(),p); PushX.savePrefs(prefs); const s=await PushX.sub().catch(()=>null); if(s) await pushApi({action:"prefs",endpoint:s.endpoint,prefs,tz:remTz()}).catch(()=>{}); },
   async test(){ const s=await PushX.sub(); if(!s) throw new Error("Notifications aren't turned on yet."); const r=await pushApi({action:"test",endpoint:s.endpoint}); if(!r.sent) throw new Error(r.error||("Delivery failed ("+(r.status||"?")+")")); }
@@ -669,9 +717,11 @@ function RemindersRuntime(){
   useEffect(()=>{
     let tm=null;
     const fire=(title,body)=>{ setToast({title,body}); clearTimeout(tm); tm=setTimeout(()=>setToast(null),15000); };
-    let syncedPid=null, ready=false;
+    let syncedPid=null, ready=false, healedPid=null, lastHeal=0;
     const check=()=>{
       const now=Date.now(), pid=window.__echoPid;
+      if(pid&&healedPid!==pid){ healedPid=pid; lastHeal=now; PushX.heal(pid,window.__echoName).then(()=>flushRemOutbox()); }
+      flushRemOutbox();
       if(pushOn()){
         if(!pid) return;
         if(syncedPid!==pid){ syncedPid=pid; ready=false; syncRemindersFromServer(pid).catch(()=>{}).then(()=>{ ready=true; check(); }); }
@@ -698,10 +748,10 @@ function RemindersRuntime(){
       if(m.type==="echo-push-open"&&window.__echoPid) window.dispatchEvent(new CustomEvent("echo-goto",{detail:"chat"}));
     };
     check(); seen();
-    const t1=setInterval(check,15000), t2=setInterval(seen,20*60000), vis=()=>{ if(!document.hidden){ if(pushOn()&&window.__echoPid) syncRemindersFromServer(window.__echoPid).catch(()=>{}).then(check); else check(); seen(); } };
+    const t1=setInterval(check,15000), t2=setInterval(seen,20*60000), vis=()=>{ if(!document.hidden){ if(window.__echoPid&&Date.now()-lastHeal>30*60000){ lastHeal=Date.now(); PushX.heal(window.__echoPid,window.__echoName); } flushRemOutbox(); if(pushOn()&&window.__echoPid) syncRemindersFromServer(window.__echoPid).catch(()=>{}).then(check); else check(); seen(); } };
     document.addEventListener("visibilitychange",vis);
     try{ navigator.serviceWorker&&navigator.serviceWorker.addEventListener("message",onMsg); }catch(e){}
-    window.addEventListener("echo-toast",e=>fire(e.detail.title,e.detail.body));
+    window.addEventListener("echo-toast",e=>fire(e.detail.title,e.detail.body)); window.addEventListener("online",flushRemOutbox);
     return()=>{ clearInterval(t1); clearInterval(t2); clearTimeout(tm); document.removeEventListener("visibilitychange",vis); try{ navigator.serviceWorker&&navigator.serviceWorker.removeEventListener("message",onMsg); }catch(e){} };
   },[]);
   if(!toast) return null;
@@ -2411,8 +2461,11 @@ Open with ONE warm sentence that references SOMETHING SPECIFIC from what you kno
       let clean=stripReminder(stripMusic(stripAnchor(stripRelUpdate(stripMood(raw)))));
       let remMsg=null; try{
         let rt=extractReminders(raw);
-        if(!rt.length&&/\bremind me (?:to|about|at|on|in|that|tomorrow|tonight|later|every)\b|\bset (?:a |an )?(?:reminder|alarm)\b|\bdon'?t (?:let me )?forget\b/i.test(text)&&!/\?/.test(clean)){ const fb=await fallbackReminder(text); if(fb) rt=[fb]; }
-        if(rt.length){ remMsg=applyReminders(rt,profileId); if(!clean&&remMsg.chips.length) clean="Done."; }
+        // They asked to be reminded but the model forgot the tag: read the request out properly (wider wording than before; only skipped when the model is genuinely asking them a question)
+        const asksRem=/\bremind(?:er|ers|ing)?\b|\b(?:ping|notify|alert|wake|buzz|text|tell) me (?:at|in|on|to|when|tomorrow|tonight|every|by)\b|\bset (?:a |an )?(?:reminder|alarm|timer)\b|\bdon'?t (?:let me )?forget\b|\bmake sure i\b/i.test(text)
+          &&!(/\b(?:what|which|show|list|any|do i have|check|cancel|delete|remove)\b[^.?!]*\breminders?\b/i.test(text)&&!/\bremind me\b/i.test(text));
+        if(!rt.length&&asksRem&&(!/\?\s*$/.test(clean)||/remind|reminder|set it|noted|got it/i.test(clean))){ const fb=await fallbackReminder(text); if(fb) rt=[fb]; }
+        if(rt.length){ remMsg=applyReminders(rt,profileId); const warn=pushWarning(); if(warn&&remMsg.chips.length) remMsg.errs.push(warn); if(!clean&&remMsg.chips.length) clean="Done."; }
       }catch(e){}
       let musicMsg=null;
       if(mcmd){
@@ -2608,6 +2661,7 @@ What was your real first thought — before the polished reply?`}],
   },[jText,jBusy,profileId,mood,profile,anchors,journalInsights,relationships,applyMood,echoSpeak]);
 
   useEffect(()=>{ window.__echoPid=profileId; },[profileId]);
+  useEffect(()=>{ window.__echoName=(profile&&profile.name)||""; },[profile&&profile.name]);
   useEffect(()=>{ const f=e=>{ if(window.__echoPid&&e.detail) setScreen(e.detail); }; window.addEventListener("echo-goto",f); return()=>window.removeEventListener("echo-goto",f); },[]);
   const go=useCallback(s=>{
     setMenu(false);
