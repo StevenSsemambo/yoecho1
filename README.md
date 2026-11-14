@@ -278,3 +278,8 @@ Decoded audio is raw floats, so all 24 banks together would need about 180 MB. B
 - It also writes a **mix sheet** for the whole piece: level, reverb and echo per part (pad, comp, lead, arp, bass, drums, hats) and stereo position for the melodic parts, eased in at the engine's mixer strips.
 - `critique(plan).orch` marks it: chorus fuller than verse, intro lighter than chorus, lead different from the chord instrument, at most two sustained instruments at once, doubles that make sense, lead louder than chords, pads not swamping, no reverb on bass. One rewrite from the critic's notes; `EchoMusic.setOrchestra` applies it; `window.__lastOrchScore`.
 - Liked pieces now also teach orchestration and mixing (`likedExamples(n, "orch")`), and the arrangement is saved with the piece.
+
+## v18 — Voices
+- New recorded banks: **ooh** (FluidR3 "Voice Oohs") and **synthchoir** (FluidR3 "Synth Choir"), alongside the existing choir "aahs". ~0.5 MB, lazy-loaded, credited in `samples/CREDITS.txt`.
+- New in-browser **sung voices** (no recordings, no licence): `vox` (a "la" voice with vowel formants that glides ah -> oh, delayed vibrato, breath, two-voice ensemble; usable as a lead for wordless melodies or as a melody double), `hum` (closed-mouth "mm"), and synthetic fall-backs for `ooh` and `synthchoir` if the samples are not available.
+- The plan writer and the arranger agent know the new voices and are told when to use them (choir/ooh under big choruses and ballads, a hummed or "la" double on the hook, vox as a wordless lead in cinematic, gospel, afrobeats, amapiano, R&B). The chat steer list accepts them too ("make the lead a voice").

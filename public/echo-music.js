@@ -152,12 +152,13 @@
     guitar: { fam: "pluck", b: .5 }, pluck: { fam: "pluck", b: .5 },
     kalimba: { fam: "mallet", b: .7 }, marimba: { fam: "mallet", b: .55 }, bells: { fam: "mallet", b: .85 },
     strings: { fam: "sus", b: .5 }, pad: { fam: "sus", b: .4 }, choir: { fam: "sus", b: .35 },
+    vox: { fam: "vocal", b: .45 }, hum: { fam: "vocal", b: .3 }, ooh: { fam: "sus", b: .3 }, synthchoir: { fam: "sus", b: .4 },
     flute: { fam: "wind", b: .6 }, brass: { fam: "wind", b: .55 }, synth: { fam: "synth", b: .65 },
     sax: { fam: "reed", b: .5 }, violin: { fam: "bowed", b: .6 },
     eguitar: { fam: "pluck", b: .55 }, dguitar: { fam: "dist", b: .4 }, lguitar: { fam: "lead", b: .55 }, hammond: { fam: "keys", b: .4 }, horns: { fam: "wind", b: .6 }, clav: { fam: "keys", b: .7 }, harp: { fam: "pluck", b: .6 }
   };
   /* instrument articulation: how much of the written length a note holds */
-  var ARTIC = { dist: .8, lead: .93, keys: .85, pluck: .5, mallet: .5, sus: .96, wind: .92, synth: .8, reed: .93, bowed: .97 };
+  var ARTIC = { vocal: .95, dist: .8, lead: .93, keys: .85, pluck: .5, mallet: .5, sus: .96, wind: .92, synth: .8, reed: .93, bowed: .97 };
 
   /* styles: the rhythmic skeleton + instrument palette. Patterns are 16 steps (one bar of 16th notes). */
   var STYLE_LIST = ["afrobeats", "amapiano", "lofi", "house", "trap", "rnb", "ambient", "cinematic", "acoustic", "rocknroll", "rock", "blues", "jazz", "reggae", "funk", "pop", "hiphop"];
@@ -839,7 +840,7 @@
   }
 
   var INSTR_ALIAS = { electricguitar: "eguitar", cleanguitar: "eguitar", distortedguitar: "dguitar", distortion: "dguitar", rhythmguitar: "dguitar", leadguitar: "lguitar", electricbass: "ebass", bassguitar: "ebass", fingerbass: "ebass", uprightbass: "upbass", doublebass: "upbass", acousticbass: "upbass",
-                      hammondorgan: "hammond", b3: "hammond", horn: "horns", hornsection: "horns", brasssection: "horns", clavinet: "clav", saxophone: "sax", keyboard: "keys", electricpiano: "keys", rhodes: "keys", string: "strings", harps: "harp", orchestralharp: "harp", electricpiano: "keys", organ2: "organ", pipeorgan: "organ", churchorgan: "organ", marimbas: "marimba", clavinet: "clav" };
+                      voice: "vox", vocal: "vox", vocals: "vox", singer: "vox", singing: "vox", la: "vox", lala: "vox", aah: "vox", humming: "hum", mm: "hum", oohs: "ooh", voiceoohs: "ooh", oohvoice: "ooh", synthvoice: "synthchoir", vocoder: "synthchoir", syntchoir: "synthchoir", hammondorgan: "hammond", b3: "hammond", horn: "horns", hornsection: "horns", brasssection: "horns", clavinet: "clav", saxophone: "sax", keyboard: "keys", electricpiano: "keys", rhodes: "keys", string: "strings", harps: "harp", orchestralharp: "harp", electricpiano: "keys", organ2: "organ", pipeorgan: "organ", churchorgan: "organ", marimbas: "marimba", clavinet: "clav" };
   function normInstr(n) { var k = String(n || "").toLowerCase().replace(/[^a-z0-9]/g, ""); return INSTR_ALIAS[k] || k; }
   function pickInstrument(role, style, recipe, rng, taken, forced) {
     var cands = STYLES[style].pal[role].slice();
@@ -923,7 +924,7 @@
    * It is a rule-based "band": a theme (motif) that is developed, chord loops that change between sections,
    * layers that enter and leave with the energy arc, and registers kept apart so instruments do not clash.
    */
-  var LEAD_CENTER = { flute: 74, kalimba: 76, bells: 84, piano: 69, keys: 67, guitar: 66, marimba: 72, strings: 69, brass: 63, sax: 66, violin: 76, synth: 72, organ: 64, pluck: 70, pad: 66, choir: 66, eguitar: 68, dguitar: 60, lguitar: 72, hammond: 66, horns: 64, clav: 66 };
+  var LEAD_CENTER = { vox: 69, hum: 64, ooh: 68, synthchoir: 68, flute: 74, kalimba: 76, bells: 84, piano: 69, keys: 67, guitar: 66, marimba: 72, strings: 69, brass: 63, sax: 66, violin: 76, synth: 72, organ: 64, pluck: 70, pad: 66, choir: 66, eguitar: 68, dguitar: 60, lguitar: 72, hammond: 66, horns: 64, clav: 66 };
   var ARP_CENTER = { bells: 84, kalimba: 79, pluck: 74, guitar: 70, piano: 74, synth: 76, marimba: 76, keys: 72, strings: 72 };
   var COMP_CENTER = { eguitar: 55, dguitar: 48, hammond: 58, horns: 60, clav: 66, lguitar: 60, guitar: 57, piano: 62, keys: 62, organ: 58, marimba: 64, strings: 58, pad: 58 };
   var BASS_LOW = { ebass: 28, upbass: 28, sub: 31, "808": 31, log: 33, pluck: 33, synthbass: 33 };
@@ -1611,8 +1612,8 @@
     arp: { lvl: .5, rv: .38, dy: .3, duck: .6, hp: 280, pk: [6500, 1.5, .8] }, tex: { lvl: .3, rv: 0, dy: 0, duck: 0, hp: 80 }, fx: { lvl: .5, rv: .3, dy: 0, duck: 0, hp: 120 }
   };
   /* per-instrument loudness trim, measured so a middle C at the same velocity sounds equally loud for every instrument */
-  var LOUD = { piano: .76, keys: .9, organ: .57, guitar: 1.1, pluck: 1.25, kalimba: 1.18, marimba: 1.28, bells: 1, strings: 1, pad: 1.05, choir: 1.2, flute: .35, brass: .59, sax: .33, violin: .32, synth: 1.15, sub: .6, "808": .65, synthbass: .5, log: 1.2, eguitar: 1.05, dguitar: .47, lguitar: .45, ebass: .75, upbass: .9, hammond: .36, horns: .49, clav: 2.6, harp: 1 };
-  var COST = { piano: 4, keys: 2, organ: 4, guitar: 1, pluck: 2, kalimba: 2, marimba: 3, bells: 3, strings: 4, pad: 4, choir: 5, flute: 3, brass: 3, sax: 4, violin: 4, synth: 3, sub: 2, "808": 2, synthbass: 3, log: 2, eguitar: 1, dguitar: 4, lguitar: 4, ebass: 3, upbass: 2, hammond: 5, horns: 4, clav: 3, harp: 1 };
+  var LOUD = { vox: 1.1, hum: .68, ooh: 1, synthchoir: 1, piano: .76, keys: .9, organ: .57, guitar: 1.1, pluck: 1.25, kalimba: 1.18, marimba: 1.28, bells: 1, strings: 1, pad: 1.05, choir: 1.2, flute: .35, brass: .59, sax: .33, violin: .32, synth: 1.15, sub: .6, "808": .65, synthbass: .5, log: 1.2, eguitar: 1.05, dguitar: .47, lguitar: .45, ebass: .75, upbass: .9, hammond: .36, horns: .49, clav: 2.6, harp: 1 };
+  var COST = { vox: 3, hum: 2, ooh: 3, synthchoir: 3, piano: 4, keys: 2, organ: 4, guitar: 1, pluck: 2, kalimba: 2, marimba: 3, bells: 3, strings: 4, pad: 4, choir: 5, flute: 3, brass: 3, sax: 4, violin: 4, synth: 3, sub: 2, "808": 2, synthbass: 3, log: 2, eguitar: 1, dguitar: 4, lguitar: 4, ebass: 3, upbass: 2, hammond: 5, horns: 4, clav: 3, harp: 1 };
   var ROLE_STRIP = { pad: "pad", comp: "comp", lead: "lead", arp: "arp", bass: "bass" };
   var PERC_STRIP = { hat: "hats", open: "hats", shaker: "hats", conga: "hats", rim: "hats", ride: "hats", tamb: "hats", cow: "hats", chick: "hats" };
 
@@ -1714,7 +1715,9 @@
     organ:   { bank: "organ", sus: 1, atk: .04, rel: .25, cost: 2 },
     kalimba: { bank: "kalimba", rel: .4, min: .9, cost: 1 },
     bells:   { bank: "bells", rel: .6, min: 1.4, cost: 1 },
-    choir:   { bank: "choir", sus: 1, atk: .45, rel: .9, cost: 3 }
+    choir:   { bank: "choir", sus: 1, atk: .45, rel: .9, cost: 3 },
+    ooh:     { bank: "ooh", sus: 1, atk: .4, rel: .9, cost: 3 },
+    synthchoir: { bank: "synthchoir", sus: 1, atk: .5, rel: 1, cost: 3 }
   };
 
   function Engine(ctx, dest, opts) {
@@ -1977,6 +1980,29 @@
       srcs.forEach(function (os) { E.vib.connect(os.detune); });
       forms.forEach(function (fm) { var bp = ctx.createBiquadFilter(), fg = ctx.createGain(); bp.type = "bandpass"; bp.frequency.value = fm[0]; bp.Q.value = fm[1] * 4; fg.gain.value = fm[2]; srcs.forEach(function (os) { os.connect(bp); }); bp.connect(fg); fg.connect(g); });
     };
+    /* a sung voice: a buzzing glottal source shaped by vowel formants. Vowels are [F1, F2, F3] with gains; the vowel can morph during the note. */
+    var VOWELS = { a: [[800, 1, .9], [1150, 2, .55], [2900, 4, .22]], o: [[500, 1, .9], [800, 1.6, .6], [2830, 4, .16]], u: [[325, 1, 1], [700, 1.6, .45], [2530, 4, .1]],
+                   e: [[530, 1, .9], [1840, 2, .5], [2480, 4, .2]], i: [[270, 1, 1], [2300, 2, .4], [3000, 4, .22]], m: [[260, 1, 1], [1100, 3, .12], [2500, 4, .05]] };
+    function sing(E, f, t, d, v, o, c) {
+      var hold = Math.max(.35, d), atk = c.atk, rel = c.rel, end = t + hold + rel + .1, g = ctx.createGain(), src = ctx.createGain(), peak = c.peak * v, i, V1 = VOWELS[c.v1], V2 = VOWELS[c.v2 || c.v1];
+      g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(peak, t + atk); g.gain.setValueAtTime(peak, t + hold); g.gain.exponentialRampToValueAtTime(.0001, t + hold + rel);
+      var n = E.lite ? 1 : c.voices, k;
+      for (k = 0; k < n; k++) {
+        var det = n === 1 ? 0 : (k - (n - 1) / 2) * 9 + (Math.random() - .5) * 4, os = E.osc("sawtooth", f, t, end, det); lateVib(E, os, t, c.vib, c.vdelay); os.connect(src);
+      }
+      var shape = ctx.createBiquadFilter(); shape.type = "lowpass"; shape.frequency.value = clamp(f * 9, 1800, 6500); shape.Q.value = .5; src.gain.value = 1 / Math.sqrt(n); src.connect(shape);
+      for (i = 0; i < 3; i++) {
+        var bp = ctx.createBiquadFilter(), fg = ctx.createGain(), f1 = V1[i][0] * (i === 0 ? Math.max(1, f * 1.05 / V1[0][0]) : 1), f2 = V2[i][0] * (i === 0 ? Math.max(1, f * 1.05 / V2[0][0]) : 1);
+        bp.type = "bandpass"; bp.frequency.setValueAtTime(f1, t); if (c.v2 && c.v2 !== c.v1) { bp.frequency.setValueAtTime(f1, t + hold * .55); bp.frequency.linearRampToValueAtTime(f2, t + hold); }
+        bp.Q.value = V1[i][1] * 5 + 2; fg.gain.value = V1[i][2]; shape.connect(bp); bp.connect(fg); fg.connect(g);
+      }
+      if (c.breath && !E.lite) E.noise(t, hold + .1, "bandpass", clamp(f * 4, 1500, 5500), 1.2, c.breath * v, hold + .1, o);
+      g.connect(o);
+    }
+    INST.vox = function (E, f, t, d, v, o) { sing(E, f, t, d, v, o, { v1: "a", v2: d > .7 ? "o" : "a", atk: .09, rel: .35, peak: .5, voices: 2, vib: 1.5, vdelay: .3, breath: .03 }); };
+    INST.hum = function (E, f, t, d, v, o) { sing(E, f, t, d, v, o, { v1: "m", atk: .18, rel: .5, peak: .6, voices: 2, vib: 1.2, vdelay: .4, breath: .01 }); };
+    INST.ooh = function (E, f, t, d, v, o) { sing(E, f, t, d, v, o, { v1: "u", v2: "o", atk: .4, rel: .9, peak: .45, voices: 3, vib: .9, vdelay: .5, breath: .015 }); };
+    INST.synthchoir = function (E, f, t, d, v, o) { INST.choir(E, f, t, d, v, o); };
     INST.flute = function (E, f, t, d, v, o) {
       var hold = Math.max(.25, d), end = t + hold + .3, g = ctx.createGain(), a = E.osc("sine", f, t, end), b = E.osc("sine", f * 2, t, end), bg = ctx.createGain();
       E.vib.connect(a.detune); g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(.5 * v, t + .07); g.gain.setValueAtTime(.5 * v, t + hold); g.gain.exponentialRampToValueAtTime(.0001, t + hold + .15);
@@ -2107,7 +2133,7 @@
     };
 
     /* ── recorded-instrument voice: pick the nearest recorded note, repitch it with playbackRate, shape it with an envelope ── */
-    var SLOUD = { piano: 1.18, keys: 1.05, clav: 1.01, marimba: 1.18, harp: 1.14, upbass: 3.1, hammond: 1.2, organ: .81, kalimba: 1.4, bells: 1.2, choir: .55, guitar: 1.14, eguitar: 1.13, lguitar: .7, dguitar: .56, ebass: 1.83, sax: 1.08, brass: .97, horns: .96, flute: 1.04, violin: 1.3, strings: .83 };
+    var SLOUD = { ooh: .6, synthchoir: .6, piano: 1.18, keys: 1.05, clav: 1.01, marimba: 1.18, harp: 1.14, upbass: 3.1, hammond: 1.2, organ: .81, kalimba: 1.4, bells: 1.2, choir: .55, guitar: 1.14, eguitar: 1.13, lguitar: .7, dguitar: .56, ebass: 1.83, sax: 1.08, brass: .97, horns: .96, flute: 1.04, violin: 1.3, strings: .83 };
     function sampleVoice(E, sp, bank, f, t, d, v, o) {
       var m = smpMidi(f), root = bank.notes[0], k, bi;
       for (k = 1; k < bank.notes.length; k++) if (Math.abs(bank.notes[k] - m) < Math.abs(root - m)) root = bank.notes[k];

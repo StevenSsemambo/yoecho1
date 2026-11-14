@@ -25,3 +25,7 @@ More recordings (v10):
 
 Kalimba, glockenspiel (used for "bells") and choir "aahs" (v11): FluidR3 GM SoundFont, Copyright (c) 2000-2002, 2008, 2013 Frank Wen
 (MIT; the midi-js-soundfonts conversion by Benjamin Gleitzman lists it under Creative Commons Attribution 3.0 - credit given here in either case).
+
+Voice "oohs" and synth choir (v18): FluidR3 GM SoundFont "Voice Oohs" and "Synth Choir", Copyright (c) 2000-2002, 2008, 2013 Frank Wen
+(MIT; the midi-js-soundfonts conversion by Benjamin Gleitzman lists it under Creative Commons Attribution 3.0 - credit given here in either case).
+The "vox", "hum" and synthetic fall-back voices are generated in the browser (no recordings).
