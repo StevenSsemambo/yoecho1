@@ -264,3 +264,7 @@ Decoded audio is raw floats, so all 24 banks together would need about 180 MB. B
 - `EchoMusic.critique(plan)` is a rule-based music critic (range, leaps, chord tones on the beat, phrase endings, repetition, verse/chorus contrast, form, energy). Score under 80 -> the model gets the critic's notes and rewrites once; the better version wins, below 45 the engine's own melody stays.
 - The piece starts immediately; the written melody lands from the next section. `EchoMusic.setMelodies`, `EchoMusic.tonesOf` are the hooks. Repeated sections reuse their melody.
 - `chat.js` accepts `maxTokens` (cap 3000) so melody replies are not truncated.
+
+## v15 — Written bass lines
+- A third background pass (parallel to the melody pass) has the model write the **bass line** for the first verse/chorus as chord-relative tones (`R, 3, 5, b7, 8, a` approach note), so one groove works over the whole progression and follows each chord change.
+- The critic marks it separately (`critique(plan).bass`): root on beat 1, density, tone variety, syncopation, note lengths. Any issue triggers one rewrite from the critic's notes; the better version wins. `EchoMusic.setBass` applies it from the next section. `window.__lastBassScore` shows the accepted score.

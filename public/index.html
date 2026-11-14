@@ -972,7 +972,7 @@ function loadEchoMusic(){
   if(_musicPromise) return _musicPromise;
   _musicPromise=new Promise((res,rej)=>{
     const el=document.createElement("script");
-    el.src="/echo-music.js?v=17"; el.async=true;
+    el.src="/echo-music.js?v=18"; el.async=true;
     el.onload=()=>{ if(window.EchoMusic){ window.dispatchEvent(new Event("echomusic-ready")); res(window.EchoMusic); } else rej(new Error("music engine missing")); };
     el.onerror=()=>rej(new Error("could not load the music engine"));
     document.head.appendChild(el);
@@ -1148,23 +1148,61 @@ async function fetchMelodies(an,targets,extra){
   const r=await aiJson(MELODY_SYSTEM,payload,12000,2200);
   return r&&r.mel&&typeof r.mel==="object"?r.mel:null;
 }
-// Background: the piece starts at once with the engine's own hook; the written melody lands from the next section on.
+const BASS_SYSTEM=`You are a great session bassist writing the BASS LINE for sections of a piece whose chords are fixed. Return ONE JSON object and nothing else: {"bass":{"<sectionIndex>":[[bar,step,tone,length],...]}}.
+Each note is [bar, step, tone, length]: bar = 0-based bar of the pattern (write 1 or 2 bars; they repeat over every chord, so the tones are RELATIVE to that bar's chord), step = sixteenth position (0-15; beats are 0,4,8,12), length = sixteenths, tone is one of: "R" (chord root), "3", "b3", "5", "b5", "b7", "7", "6", "4", "2", "8" (octave above root), "9", or "a" (approach note: a half step into the NEXT chord's root, use it on the last beat before a chord change).
+Play like a pro for the genre:
+- Always land "R" on step 0, and keep the groove locked: the pattern repeats, with a small change in the last bar (a fill or an "a" approach note).
+- Funk/afrobeats/amapiano/reggae: syncopated, 16th or 8th note, plenty of space, notes just off the beat (steps 2, 6, 10, 14 and 3, 7, 11), reggae leaves beat 1 and plays big long notes. Rock/pop: steady eighths on the root with a 5th or octave. Jazz: walking, one note per beat (steps 0,4,8,12) using 3rd, 5th, 6th and "a" into the next chord. Hip-hop/trap/808: sparse and long, root with an occasional octave or 5th. House/EDM: off-beat pumping roots. Lo-fi/R&B: relaxed, long root-and-fifth movement.
+- 3 to 12 notes per bar, never busy. Vary lengths (long and short).
+If the message contains "critic" notes and a "previous" line, rewrite it to fix exactly those problems and keep what works. Never explain.`;
+async function fetchBass(plan,targets,extra){
+  const payload={style:plan.style||"",bpm:plan.bpm||0,bass:(plan.band&&plan.band.bass)||"",sections:targets.map(t=>({index:t.index,kind:t.kind,energy:t.energy,chords:t.chords})),...(extra||{})};
+  const r=await aiJson(BASS_SYSTEM,payload,12000,1200);
+  return r&&r.bass&&typeof r.bass==="object"?r.bass:null;
+}
+function bassTargets(plan){
+  const out=[]; let v=false,c=false;
+  (plan.sections||[]).forEach((sx,i)=>{ if(!sx||sx.bass===false||!Array.isArray(sx.chords)) return;
+    const k=String(sx.kind||"verse").toLowerCase(), t={index:i,kind:k,energy:sx.energy,chords:sx.chords.slice(0,4)};
+    if((k==="verse"||k==="head"||k==="intro"&&false)&&!v){ v=true; out.push(t); } else if((k==="chorus"||k==="drop")&&!c){ c=true; out.push(t); } });
+  return out;
+}
+function withBass(plan,map){ const c=JSON.parse(JSON.stringify(plan)); for(const k in map){ const sx=c.sections&&c.sections[k]; if(sx) sx.bassline=map[k]; } return c; }
+// Background: the piece starts at once with the engine's own hook and bass; the written parts land from the next section on.
 async function polishMelody(plan){
-  try{
-    const M=window.EchoMusic; if(!M||!M.critique||!M.tonesOf||!M.setMelodies||!plan||typeof plan!=="object") return;
-    const base=stripMel(plan), an=M.tonesOf(base); if(!an) return;
-    const targets=melTargets(an); if(!targets.length) return;
-    let best=await fetchMelodies(an,targets); if(!best) return;
-    let res=M.critique(withMel(base,best));
-    if(res.ok&&res.score<80&&res.issues.length){
-      const again=await fetchMelodies(an,targets,{critic:res.issues,previous:best});
-      if(again){ const r2=M.critique(withMel(base,again)); if(r2.ok&&r2.score>res.score){ best=again; res=r2; } }
-    }
-    if(!res.ok||res.score<45) return;                      /* not good enough: keep the engine's own melody */
-    const cur=M.current&&M.current(); if(!cur||(cur.planSrc!==plan&&cur.plan!==plan)) return;   /* the listener moved on */
-    M.setMelodies(best);
-    try{ window.__lastMelodyScore=res.score; }catch(e){}
-  }catch(e){}
+  const M=window.EchoMusic; if(!M||!M.critique||!plan||typeof plan!=="object") return;
+  const stillOn=()=>{ const cur=M.current&&M.current(); return !!cur&&(cur.planSrc===plan||cur.plan===plan); };
+  const melPass=async()=>{
+    try{
+      if(!M.tonesOf||!M.setMelodies) return;
+      const base=stripMel(plan), an=M.tonesOf(base); if(!an) return;
+      const targets=melTargets(an); if(!targets.length) return;
+      let best=await fetchMelodies(an,targets); if(!best) return;
+      let res=M.critique(withMel(base,best)).mel;
+      if(res.score<80&&res.issues.length){
+        const again=await fetchMelodies(an,targets,{critic:res.issues,previous:best});
+        if(again){ const r2=M.critique(withMel(base,again)).mel; if(r2.score>res.score){ best=again; res=r2; } }
+      }
+      if(res.score<45||!stillOn()) return;
+      M.setMelodies(best); window.__lastMelodyScore=res.score;
+    }catch(e){}
+  };
+  const bassPass=async()=>{
+    try{
+      if(!M.setBass) return;
+      const base=JSON.parse(JSON.stringify(plan)); (base.sections||[]).forEach(x=>{ if(x&&typeof x==="object") delete x.bassline; });
+      const targets=bassTargets(base); if(!targets.length) return;
+      let best=await fetchBass(base,targets); if(!best) return;
+      let res=M.critique(withBass(base,best)).bass;
+      if(res.issues.length){
+        const again=await fetchBass(base,targets,{critic:res.issues,previous:best});
+        if(again){ const r2=M.critique(withBass(base,again)).bass; if(r2.score>res.score){ best=again; res=r2; } }
+      }
+      if(res.score<50||!stillOn()) return;
+      M.setBass(best); window.__lastBassScore=res.score;
+    }catch(e){}
+  };
+  await Promise.all([melPass(),bassPass()]);
 }
 // Runs a music command. Returns a small descriptor that the chat shows as a card or a chip.
 async function runMusic(cmd,curMood){

@@ -477,6 +477,30 @@
     notes.forEach(function (x) { if (x.b < nb) byBar[x.b].push({ s: x.s, deg: x.deg, len: x.len }); });
     return { bars: nb, byBar: byBar, n: notes.length };
   }
+  /* a written bass line: [[bar, sixteenth, "R"|"3"|"5"|"b7"|"8"|"a"...,  length], ...]. Tones are relative to each bar's chord, so a 1-2 bar groove works over any progression. */
+  var BASS_TONES = { R: 0, "1": 0, "2": 2, "b3": 3, "3": 3, "4": 5, "b5": 6, "5": 7, "6": 9, "b7": 10, "7": 11, "8": 12, "9": 14, a: "a", "a-": "a-", "a+": "a+" };
+  function parseBassLine(bl, secBars) {
+    if (!Array.isArray(bl)) return null;
+    var notes = [], i;
+    for (i = 0; i < bl.length && notes.length < 64; i++) {
+      var n = bl[i]; if (!Array.isArray(n) || n.length < 3) continue;
+      var b = Math.round(Number(n[0])), st = Math.round(Number(n[1])), tk = String(n[2]).trim().replace(/^r$/i, "R").replace(/^A/, "a"), ln = Math.round(Number(n[3] === undefined ? 2 : n[3]));
+      if (!isFinite(b) || !isFinite(st) || !isFinite(ln) || BASS_TONES[tk] === undefined) continue;
+      if (b < 0 || b >= Math.min(secBars, 8) || st < 0 || st > 15) continue;
+      notes.push({ b: b, s: st, t: tk, len: clamp(ln, 1, 16) });
+    }
+    if (notes.length < 2) return null;
+    notes.sort(function (a, c) { return a.b - c.b || a.s - c.s; });
+    for (i = 0; i < notes.length; i++) {
+      var nx = notes[i + 1], abs = notes[i].b * 16 + notes[i].s;
+      if (nx) { var gap = nx.b * 16 + nx.s - abs; if (gap <= 0) { notes.splice(i, 1); i--; continue; } if (notes[i].len > gap) notes[i].len = gap; }
+    }
+    var nb = 0; notes.forEach(function (x) { if (x.b + 1 > nb) nb = x.b + 1; });
+    nb = nb <= 1 ? 1 : nb <= 2 ? 2 : nb <= 4 ? 4 : 8;
+    var byBar = []; for (i = 0; i < nb; i++) byBar.push([]);
+    notes.forEach(function (x) { if (x.b < nb) byBar[x.b].push({ s: x.s, t: x.t, len: x.len }); });
+    return { bars: nb, byBar: byBar, n: notes.length };
+  }
   function parsePlan(p) {
     if (typeof p === "string") { var t = p.replace(/```(?:json)?/gi, ""), a = t.indexOf("{"), z = t.lastIndexOf("}"); try { p = JSON.parse(t.slice(a, z + 1)); } catch (e) { return null; } }
     if (!p || typeof p !== "object" || !Array.isArray(p.sections)) return null;
@@ -493,14 +517,14 @@
       var kind = String(rs.kind || "verse").toLowerCase(); if (!PLAN_KINDS[kind]) kind = "verse";
       var lead = String(rs.lead || "theme").toLowerCase(); if (!PLAN_LEAD[lead]) lead = "theme";
       var bars = clamp(Math.round(Number(rs.bars) || chords.length), 4, 24), dr = Number(rs.drums); if (!isFinite(dr)) dr = 2;
-      var pm = parseMel(rs.mel, bars);
-      out.sections.push({ src: i, mel: pm ? pm.byBar : null, melBars: pm ? pm.bars : 0, kind: kind, chords: chords, bars: bars, energy: clamp(typeof rs.energy === "number" ? rs.energy : .6, .1, 1), lead: lead, drums: clamp(Math.round(dr), 0, 2),
+      var pm = parseMel(rs.mel, bars), pbs = parseBassLine(rs.bassline, bars);
+      out.sections.push({ src: i, mel: pm ? pm.byBar : null, melBars: pm ? pm.bars : 0, bl: pbs ? pbs.byBar : null, blBars: pbs ? pbs.bars : 0, kind: kind, chords: chords, bars: bars, energy: clamp(typeof rs.energy === "number" ? rs.energy : .6, .1, 1), lead: lead, drums: clamp(Math.round(dr), 0, 2),
         bass: rs.bass !== false, arp: rs.arp === true, comp: rs.comp !== false, fill: rs.fill !== false && kind !== "intro", crash: kind === "chorus" || kind === "drop" || kind === "solo" || rs.crash === true });
     }
     if (out.sections.length < 2) return null;
     var sig = function (x) { return x.kind + "|" + x.chords.map(function (c) { return c.rs + c.q; }).join(); }, seen = {};   /* a repeated section plays the same written melody */
-    out.sections.forEach(function (x) { if (x.mel) { if (!seen[sig(x)]) seen[sig(x)] = x; } });
-    out.sections.forEach(function (x) { if (!x.mel && x.lead !== "none") { var o = seen[sig(x)]; if (o) { x.mel = o.mel; x.melBars = o.melBars; } } });
+    out.sections.forEach(function (x) { if (x.mel || x.bl) { if (!seen[sig(x)]) seen[sig(x)] = x; } });
+    out.sections.forEach(function (x) { var o = seen[sig(x)]; if (!o) return; if (!x.mel && o.mel && x.lead !== "none") { x.mel = o.mel; x.melBars = o.melBars; } if (!x.bl && o.bl && x.bass) { x.bl = o.bl; x.blBars = o.blBars; } });
     if (!out.mode) { var c0 = out.sections[0].chords[0].q; out.mode = (c0 === "min" || c0 === "m7" || c0 === "m9" || c0 === "m11" || c0 === "m6") ? "aeolian" : (c0 === "7" || c0 === "9" || c0 === "13") ? "mixolydian" : "ionian"; }
     var st = String(p.style || "").toLowerCase().replace(/[^a-z]/g, ""); st = ({ rockandroll: "rocknroll", hiphop2: "hiphop" })[st] || st; out.style = STYLES[st] && !STYLES[st].solo ? st : "";
     if (typeof p.bpm === "number" && isFinite(p.bpm)) out.bpm = clamp(Math.round(p.bpm), 50, 150);
@@ -530,7 +554,8 @@
     var pl = parsePlan(src); if (!pl) return { ok: false, score: 0, issues: ["The plan could not be read."], stats: {} };
     var sc = MODES[pl.mode] || MODES.ionian, n = sc.length, issues = [], pen = 0, stats = { sections: pl.sections.length, melodies: 0 };
     function semi(d) { var o = Math.floor(d / n); return sc[d - o * n] + 12 * o; }
-    function note(msg, w) { issues.push(msg); pen += w; }
+    var cur = "plan", parts = { plan: { pen: 0, issues: [] }, mel: { pen: 0, issues: [] }, bass: { pen: 0, issues: [] } };
+    function note(msg, w) { issues.push(msg); pen += w; parts[cur].pen += w; parts[cur].issues.push(msg); }
     var sections = pl.sections, avgPitch = {}, i, j;
     var chorusCount = 0, hasContrast = false, uniq = {};
     sections.forEach(function (sx) { if (sx.kind === "chorus" || sx.kind === "drop") chorusCount++; if (/bridge|solo|break|build/.test(sx.kind)) hasContrast = true; sx.chords.forEach(function (c) { uniq[c.rs + c.q] = 1; }); });
@@ -544,7 +569,7 @@
     if (firstChorus && firstVerse && firstChorus.chords.map(function (c) { return c.rs + c.q; }).join() === firstVerse.chords.map(function (c) { return c.rs + c.q; }).join()) note("The verse and the chorus use the same chords: give the chorus a different progression.", 10);
     var last = sections[sections.length - 1]; if (last && last.kind !== "outro" && last.energy > .8) note("The ending stays at full energy: finish with a softer outro or a held final chord.", 3);
     for (i = 0; i < sections.length; i++) {
-      var sx = sections[i]; if (!sx.mel) { if ((sx.kind === "chorus" || sx.kind === "verse") && sx.lead !== "none") note("Section " + sx.src + " (" + sx.kind + ") has no written melody.", 6); continue; }
+      cur = "mel"; var sx = sections[i]; if (!sx.mel) { if ((sx.kind === "chorus" || sx.kind === "verse") && sx.lead !== "none") note("Section " + sx.src + " (" + sx.kind + ") has no written melody.", 6); continue; }
       stats.melodies++;
       var seq = [], bars = sx.mel.length, strong = 0, strongOk = 0, leaps = 0, steps = 0, repeats = 0, total = 0, durs = {}, sumP = 0, bi, k;
       for (bi = 0; bi < bars; bi++) for (k = 0; k < sx.mel[bi].length; k++) { var nt = sx.mel[bi][k]; seq.push({ b: bi, s: nt.s, p: semi(nt.deg), deg: nt.deg, len: nt.len }); }
@@ -574,10 +599,23 @@
       if (Object.keys(durs).length < 2 && seq.length > 5) note(tag + "every note has the same length; mix long and short notes for a rhythm with character.", 5);
       if (bars >= 4) { var sigs = {}; for (bi = 0; bi < bars; bi++) sigs[sx.mel[bi].map(function (x) { return x.s + ":" + x.deg; }).join()] = 1; if (Object.keys(sigs).length === 1) note(tag + "every bar is identical; develop the idea (answer it, vary the end, go higher).", 7); }
     }
-    var ci = sections.indexOf(firstChorus), vi = sections.indexOf(firstVerse);
+    sections.forEach(function (sx) {
+      if (!sx.bl) return; stats.basslines = (stats.basslines || 0) + 1;
+      cur = "bass"; var tag = "Bass, section " + sx.src + " (" + sx.kind + "): ", all = [], bi, rootsDown = 0, offb = 0, kinds = {}, durs = {};
+      for (bi = 0; bi < sx.bl.length; bi++) { var bn = sx.bl[bi]; if (bn.length && bn[0].s <= 2 && bn[0].t === "R") rootsDown++; bn.forEach(function (x) { all.push(x); kinds[x.t] = 1; durs[x.len] = 1; if (x.s % 4 !== 0) offb++; }); }
+      var per = all.length / sx.bl.length;
+      if (rootsDown / sx.bl.length < .5) note(tag + "the bass should land on the chord root (\"R\") on beat 1 (step 0) of most bars.", 14);
+      if (per > 14) note(tag + "too busy (" + per.toFixed(1) + " notes per bar); a bass line locks in with the drums, leave space.", 5);
+      if (per < 1.5 && sx.bl.length >= 2) note(tag + "very sparse; add a pickup or a fifth so the groove moves.", 3);
+      if (Object.keys(kinds).length < 2 && all.length > 4) note(tag + "only one tone is used; add the 5th, the octave or an approach note (\"a\") before the chord change.", 6);
+      if (!offb && all.length > 5) note(tag + "every note is on the beat; add a syncopated note (steps 2, 6, 10, 14) for groove.", 4);
+      if (Object.keys(durs).length < 2 && all.length > 5) note(tag + "every note has the same length; mix short and long notes.", 3);
+    });
+    cur = "mel"; var ci = sections.indexOf(firstChorus), vi = sections.indexOf(firstVerse);
     if (ci >= 0 && vi >= 0 && avgPitch[ci] !== undefined && avgPitch[vi] !== undefined && avgPitch[ci] < avgPitch[vi] + 1) note("The chorus melody should sit higher than the verse melody so it lifts.", 6);
     var score = Math.max(0, Math.min(100, 100 - pen));
-    return { ok: true, score: score, issues: issues.slice(0, 8), stats: stats };
+    var fin = function (k) { return { score: Math.max(0, 100 - parts[k].pen), issues: parts[k].issues.slice(0, 8) }; };
+    return { ok: true, score: score, issues: issues.slice(0, 8), stats: stats, mel: fin("mel"), bass: fin("bass"), plan: fin("plan") };
   }
   /* what a melody writer needs to see: for every chord, which scale degrees are its notes (safe on the beat) */
   function tonesOf(src) {
@@ -588,6 +626,21 @@
           var t = []; c.abs.forEach(function (x) { var i = sc.indexOf((c.rs + x) % 12); if (i >= 0 && t.indexOf(i) < 0) t.push(i); }); return t; }) };
       }) };
   }
+  function setPart(map, field, bfield, parse) {
+    var pc = P.piece; if (!pc || !pc.comp || !pc.comp.spec || !pc.comp.spec.plan || !map) return 0;
+    var plan = pc.comp.spec.plan, raw = P.lastBrief && (P.lastBrief.planSrc || P.lastBrief.plan), done = 0, rf = field === "bl" ? "bassline" : "mel";
+    plan.sections.forEach(function (ps) {
+      var m = map[ps.src]; if (m === undefined) return;
+      var pm = m === null ? null : parse(m, ps.bars); if (m !== null && !pm) return;
+      ps[field] = pm ? pm.byBar : null; ps[bfield] = pm ? pm.bars : 0; done++;
+      if (raw && typeof raw === "object" && Array.isArray(raw.sections) && raw.sections[ps.src]) { if (m === null) delete raw.sections[ps.src][rf]; else raw.sections[ps.src][rf] = m; }
+    });
+    var sg = function (x) { return x.kind + "|" + x.chords.map(function (c) { return c.rs + c.q; }).join(); }, sn = {};
+    plan.sections.forEach(function (x) { if (x[field] && !sn[sg(x)]) sn[sg(x)] = x; });
+    plan.sections.forEach(function (x) { if (!x[field] && sn[sg(x)] && (field === "bl" ? x.bass : x.lead !== "none")) { x[field] = sn[sg(x)][field]; x[bfield] = sn[sg(x)][bfield]; } });
+    return done;
+  }
+  function setBass(map) { return setPart(map, "bl", "blBars", parseBassLine); }
   /* put (or replace) written melodies into the plan that is playing; they take effect from the next section */
   function setMelodies(map) {
     var pc = P.piece; if (!pc || !pc.comp || !pc.comp.spec || !pc.comp.spec.plan || !map) return 0;
@@ -1129,12 +1182,27 @@
       }
       return out;
     }
+    /* plays the bass line the composer wrote: chord-relative tones, locked to the bar, with the weight on the downbeat and a push into the next chord */
+    function bassLineBar(sec, chord, rootM, nextM, vb) {
+      var out = [], notes = sec.bl[S.secBar % sec.blBars] || [], third = chordThird(chord), bp = S.pal.bass, glideOk = bp === "synthbass" || bp === "sub" || bp === "808", prevN = null, max = Math.max(4, S.style.bassMax || 16);
+      for (var k = 0; k < notes.length; k++) {
+        var nt = notes[k], t = nt.t, note;
+        if (t === "a" || t === "a-" || t === "a+") note = t === "a+" ? nextM + 1 : t === "a-" ? nextM - 1 : (nextM > rootM ? nextM - 1 : nextM + 1);
+        else if (t === "3" || t === "b3") note = rootM + third; else note = rootM + BASS_TONES[t];
+        if (note > rootM + 14) note -= 12;
+        var ev = { s: nt.s, r: "bass", i: S.pal.bass, m: note, d: Math.max(1, Math.min(nt.len, max) * .92), v: vb * (nt.s === 0 ? 1 : nt.s % 4 === 0 ? .88 : .78) * (1 + (rng() - .5) * .08), p: 1 };
+        if (glideOk && prevN !== null && note !== prevN && Math.abs(note - prevN) <= 5 && nt.len >= 2 && rng.chance(.15)) ev.gl = prevN - note;
+        out.push(ev); prevN = note;
+      }
+      return out;
+    }
     function bassBar(sec, chord, nextChord, cb) {
       var out = [], gens = S.style.bassGen || [], pats = S.style.bass.concat(BASS_ALT[S.styleName] || []), harm = S.style.harm;
       if (!sec.layers.bass || !S.pal.bass) return out;
       var lo = BASS_LOW[S.pal.bass] || 33, rootPc = (S.root + chordRs(chord)) % 12, rootM = placeInRange(rootPc, lo, lo + 11);
       var nextPc = (S.root + chordRs(nextChord)) % 12, nextM = placeInRange(nextPc, rootM - 6, rootM + 5);
       var lastOfChord = (cb % harm) === harm - 1, vb = BASE_VEL.bass * sec.dyn, max = S.style.bassMax;
+      if (sec.bl) return bassLineBar(sec, chord, rootM, nextM, vb);
       var total = gens.length + pats.length, pick = sec.bassVar % total;
       if (pick < gens.length) return bassGenBar(gens[pick], chord, nextChord, rootM, nextM, vb, lastOfChord, cb, harm);
       var pat = pats[pick - gens.length], third = chordThird(chord);
@@ -1276,6 +1344,7 @@
         compVar: rng.int(4), bassVar: rng.int(6), drumVar: rng.int(4), loop: 0, ans: false
       };
       if (ps && ps.mel) { S.sec.mel = ps.mel; S.sec.melBars = ps.melBars; }
+      if (ps && ps.bl) { S.sec.bl = ps.bl; S.sec.blBars = ps.blBars; }
       if (ps) { S.sec.layers.comp = ps.comp; S.sec.layers.arp = ps.arp && !!S.pal.arp; S.sec.layers.bass = ps.bass && e >= .15; S.sec.loop = 0; }
       if (tpl.k === "intro" && S.style.drums === 2 && !S.sec.layers.comp && !ps) S.sec.layers.arp = true;
       S.sec.layers.ans = !!S.pal.ans && rng.chance(.25 + .55 * e);
@@ -2432,7 +2501,7 @@
     current: function () { var pc = P.piece; if (!pc || !P.lastBrief) return null; var b = {}; for (var k in P.lastBrief) b[k] = P.lastBrief[k]; b.seed = pc.seed; return b; },
     like: like, saved: saved, playSaved: playSaved, tasteSummary: tasteSummary, info: info, level: level,
     on: function (fn) { P.listeners.push(fn); return function () { API.off(fn); }; }, off: function (fn) { P.listeners = P.listeners.filter(function (x) { return x !== fn; }); },
-    critique: critique, setMelodies: setMelodies, tonesOf: tonesOf, parseBrief: parseBrief, moods: MOOD_LIST.slice(), styles: STYLE_LIST.map(function (k) { return { id: k, name: STYLES[k].name }; }),
+    critique: critique, setMelodies: setMelodies, setBass: setBass, tonesOf: tonesOf, parseBrief: parseBrief, moods: MOOD_LIST.slice(), styles: STYLE_LIST.map(function (k) { return { id: k, name: STYLES[k].name }; }),
     samples: { setBase: function (u) { SMP.base = u; }, memory: function () { return { mb: +(smpBytes() / 1048576).toFixed(1), budgetMB: +(smpBudget() / 1048576).toFixed(0), banks: Object.keys(SMP.banks).filter(function (k) { return SMP.banks[k].ready; }).length }; }, setBudgetMB: function (n) { SMP.budgetMB = n; }, enable: function (on) { SMP.on = !!on; }, enabled: function () { return SMP.on; }, status: function () { var o = {}; for (var k in SMP.banks) o[k] = SMP.banks[k].ready ? "ready" : SMP.banks[k].failed ? "failed" : "loading"; return o; }, preload: function (names) { var c = ensureCtx(); if (c) (names || Object.keys(SMAP).map(function (k) { return SMAP[k].bank; }).concat(["drums-acoustic", "drums-lm2"])).forEach(function (b) { smpGet(b, c); }); } },
     mix: mix, mixNext: mixNext, mixInfo: mixInfo, buildMixPlan: buildMixPlan, renderMix: renderMix,
     render: render, toWav: toWav, exportWav: exportWav, exportMixWav: exportMixWav,
