@@ -941,7 +941,7 @@
     var SOLO = spec.solo ? SOLO_SETUP[spec.solo] : null, PLAN = spec.plan || null;
     if (spec.drums) S.fixed = { pad: false, comp: false, lead: false, arp: false, bass: false };
     if (SOLO) S.fixed = SOLO.poly ? { drums: false, pad: false } : { drums: false, comp: false, arp: false, bass: false };
-    var LAYER_KEYS = { drums: "drums", percussion: "drums", perc: "drums", beat: "drums", bass: "bass", bassline: "bass", pad: "pad", pads: "pad", strings: "pad", atmosphere: "pad", comp: "comp", chords: "comp", harmony: "comp", lead: "lead", melody: "lead", arp: "arp", arpeggio: "arp", sparkle: "arp", fx: "fx", effects: "fx" };
+    var LAYER_KEYS = { drums: "drums", percussion: "drums", perc: "drums", beat: "drums", bass: "bass", bassline: "bass", pad: "pad", pads: "pad", strings: "pad", atmosphere: "pad", comp: "comp", chords: "comp", harmony: "comp", lead: "lead", melody: "lead", arp: "arp", arpeggio: "arp", sparkle: "arp", fx: "fx", effects: "fx", voice: "voice", voices: "voice", vocals: "voice", vocal: "voice", choir: "voice", singers: "voice" };
     var ROLES_SET = { pad: 1, comp: 1, lead: 1, arp: 1, bass: 1 };
 
     function chooseArc(style, recipe) {
@@ -1457,6 +1457,23 @@
       if (!ps || !ps.band) return;
       for (r in ps.band) { var to = ps.band[r] === "none" ? null : ps.band[r]; if (S.pal[r] === to) continue; S.palOver[r] = { was: S.pal[r], to: to }; S.pal[r] = to; }
     }
+    /* the engine's own sense of when a human voice helps: oohs or a choir under the big sections, a hummed double on the hook. Independent of the plan, so voices show up even when the model does not ask. */
+    var VSTY = { pop: .6, rnb: .7, acoustic: .6, cinematic: .85, ambient: .7, afrobeats: .55, amapiano: .5, lofi: .45, reggae: .35, trap: .35, house: .3, edm: .3, hiphop: .3, blues: .3, rock: .2, jazz: .15, funk: .15, rocknroll: 0 };
+    function isVoiceName(n) { return n === "vox" || n === "hum" || n === "ooh" || n === "choir" || n === "synthchoir"; }
+    function voxBase() { var sn = S.styleName, mood = spec.stages[Math.max(0, S.stage)].mood, b = VSTY[sn] === undefined ? .3 : VSTY[sn]; if (mood === "sadness" || mood === "love" || mood === "hope") b += .15; else if (mood === "anger") b -= .2; return clamp(b, 0, .9); }
+    function pickVoice(sec, ps) {
+      if (SOLO || spec.drums || (S.style && S.style.solo)) return null;
+      if (ps && (ps.dbl || (ps.band && (isVoiceName(ps.band.pad) || isVoiceName(ps.band.lead) || isVoiceName(ps.band.comp) || isVoiceName(ps.band.ans))))) return null;
+      if (isVoiceName(S.pal.pad) || isVoiceName(S.pal.lead) || isVoiceName(S.pal.comp) || isVoiceName(S.pal.ans)) return null;
+      var sn = S.styleName, mood = spec.stages[Math.max(0, S.stage)].mood, w = /chorus|drop|climax|swell|rise/.test(sec.kind) ? 1 : (sec.kind === "bridge" && sec.e > .5) ? .8 : /break|release/.test(sec.kind) ? .6 : (sec.kind === "verse" && ({ rnb: 1, lofi: 1, acoustic: 1 })[sn]) ? .6 : 0;
+      if (!w) return null;
+      var b = voxBase();
+      if (!rng.chance(b * w * (sec.e > .7 ? 1 : .75))) return null;
+      var inst = (sn === "cinematic" || mood === "sadness" || mood === "fear") ? "choir" : (sn === "ambient" || sn === "acoustic") ? "ooh" : (rng.chance(.5) ? "ooh" : "synthchoir");
+      var dbl = ({ afrobeats: 1, amapiano: 1, rnb: 1, lofi: 1, acoustic: 1, pop: 1 })[sn] && sec.lead !== "none" && rng.chance(.55) ? { i: "hum", o: rng.pick([0, 12]) } : null;
+      return { i: inst, dbl: dbl };
+    }
+    function voxPal() { if (SOLO || spec.drums || voxBase() < .45) return S.pal; var o = {}, k; for (k in S.pal) o[k] = S.pal[k]; o.vx1 = (S.styleName === "cinematic" || (spec.stages[Math.max(0, S.stage)].mood === "sadness")) ? "choir" : "ooh"; return o; }
     function startSection() {
       applySteer();
       if (S.stage < spec.stages.length - 1 && S.barNo - S.stageStart >= spec.stages[S.stage].bars) enterStage(S.stage + 1, true);
@@ -1481,6 +1498,7 @@
         compVar: rng.int(4), bassVar: rng.int(6), drumVar: rng.int(4), loop: 0, ans: false
       };
       applySectionBand(ps);
+      S.sec.vox = pickVoice(S.sec, ps);
       S.sec.dbl = ps && ps.dbl ? ps.dbl : null;
       if (ps && ps.mel) { S.sec.mel = ps.mel; S.sec.melBars = ps.melBars; }
       if (ps && ps.bl) { S.sec.bl = ps.bl; S.sec.blBars = ps.blBars; }
@@ -1518,13 +1536,19 @@
       }
       var lastBar = S.secBar === sec.bars - 1, ev = [];
       ev = ev.concat(padBar(sec, chord, chordStart), bassBar(sec, chord, nextChord, cb), compBar(sec, chord, cb), leadBar(sec, chord, ci, cb), answerBar(sec, chord, S.secBar % 4), arpBar(sec), drumBar(sec, S.secBar === 0, lastBar));
+      if (sec.vox) {
+        if (chordStart || !S.voxV) { S.voxV = voice(chord, sec.vox.i === "choir" ? 60 : 64, S.voxV, 10, false); }
+        var vt = S.voxV.slice(-3), vi2;
+        if (chordStart) for (vi2 = 0; vi2 < vt.length; vi2++) ev.push({ s: 0, r: "pad", i: sec.vox.i, m: vt[vi2], d: harm * 16 - 1, v: BASE_VEL.pad * sec.dyn * .75, p: 2, vx: 1 });
+        if (sec.vox.dbl) { var snap = ev.slice(); snap.forEach(function (e) { if (e.r === "lead" && !e.ans && !e.vx && e.i !== "hum" && e.m !== undefined) ev.push({ s: e.s, r: "lead", i: "hum", m: e.m + sec.vox.dbl.o, d: e.d, v: e.v * .5, p: 2, vx: 1 }); }); }
+      }
       /* transitions: the bar before a drop leaves a gap and a reversed cymbal pulls into it; a break opens with a falling sweep */
       if (lastBar && sec.kind === "build") {
         ev = ev.filter(function (e) { return !(e.s >= 14 && (e.r === "pad" || e.r === "comp" || e.r === "lead" || e.r === "arp" || e.r === "bass")); });
         ev.push({ s: 8, r: "fx", k: "revcrash", d: 8, v: .55, p: 2 });
       }
       var mk = S.mask, fxm = S.fixed, hasMask = !!fxm; for (var mq in mk) if (mk[mq] === false) hasMask = true;
-      if (hasMask) ev = ev.filter(function (e) { var kk = (e.r === "drums" || e.r === "perc") ? "drums" : e.r; return mk[kk] !== false && !(fxm && fxm[kk] === false && e.r !== "fx"); });
+      if (hasMask) ev = ev.filter(function (e) { var kk = e.vx ? "voice" : (e.r === "drums" || e.r === "perc") ? "drums" : e.r; return mk[kk] !== false && !(fxm && fxm[kk] === false && e.r !== "fx"); });
       if (S.secBar === 0 && (sec.kind === "break" || sec.kind === "breath" || sec.kind === "bridge")) ev.push({ s: 0, r: "fx", k: "fall", d: 12, v: .4, p: 2 });
       if (S.style.solo) ev = ev.filter(function (e) { return e.r !== "fx"; });
       humanize(ev);
@@ -1543,8 +1567,8 @@
         idx: S.barNo, bpm: bpmB, stepDur: 60 / bpmB / 4, barDur: 60 / bpmB * 4, swing: S.style.swing, swing8: S.style.swing8 || 0, human: human, events: ev,
         lay: S.style.lay || 0,
         mix: { wobble: S.style.wobble || 0, cut: cut, wet: wet, duck: S.style.duck, delay: S.style.delay, tex: S.tex, grit: S.recipe.grit, bright: S.recipe.bright, space: S.recipe.space, level: S.style.level || 1 },
-        strips: PLAN && PLAN.mix || null, kit: S.style.kit, sec: { kind: sec.kind, idx: S.secNo, bar: S.secBar, len: sec.bars, e: sec.e }, secStart: first, stage: S.stage, mood: spec.stages[S.stage].mood, style: S.styleName,
-        key: { root: S.root, mode: S.mode }, palette: S.pal
+        strips: PLAN && PLAN.mix || null, palette: voxPal(), kit: S.style.kit, sec: { kind: sec.kind, idx: S.secNo, bar: S.secBar, len: sec.bars, e: sec.e }, secStart: first, stage: S.stage, mood: spec.stages[S.stage].mood, style: S.styleName,
+        key: { root: S.root, mode: S.mode }
       };
       S.secBar++; S.barNo++;
       return bar;
