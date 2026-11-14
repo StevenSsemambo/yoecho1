@@ -501,6 +501,21 @@
     notes.forEach(function (x) { if (x.b < nb) byBar[x.b].push({ s: x.s, t: x.t, len: x.len }); });
     return { bars: nb, byBar: byBar, n: notes.length };
   }
+  /* a written drum groove: {"kick":"x...x...x...x...","snare":"....x.......x...", ...} one 16-step string per voice. x = hit, X = accent, o = ghost, . = rest. */
+  var GROOVE_KEYS = { kick: 1, snare: 1, clap: 1, hat: 1, open: 1, ride: 1, rim: 1, tamb: 1, shaker: 1, cow: 1, tom: 1, cLo: 1, cHi: 1 };
+  function parseGroove(g) {
+    if (!g || typeof g !== "object" || Array.isArray(g)) return null;
+    var out = {}, hits = 0, k;
+    for (k in g) {
+      var kk = k === "conga" || k === "congaLow" ? "cLo" : k === "congaHigh" ? "cHi" : k === "hihat" || k === "hats" ? "hat" : k === "openhat" ? "open" : k === "tambourine" ? "tamb" : k;
+      if (!GROOVE_KEYS[kk] || typeof g[k] !== "string") continue;
+      var str = g[k].replace(/[^.xXo]/g, "."); if (str.length < 16) str = str + new Array(17 - str.length).join("."); str = str.slice(0, 16);
+      out[kk] = str; hits += str.replace(/\./g, "").length;
+    }
+    if (!out.kick && !out.snare && !out.clap && !out.rim) return null;
+    if (hits < 3 || hits > 90) return null;
+    return out;
+  }
   function parsePlan(p) {
     if (typeof p === "string") { var t = p.replace(/```(?:json)?/gi, ""), a = t.indexOf("{"), z = t.lastIndexOf("}"); try { p = JSON.parse(t.slice(a, z + 1)); } catch (e) { return null; } }
     if (!p || typeof p !== "object" || !Array.isArray(p.sections)) return null;
@@ -517,14 +532,14 @@
       var kind = String(rs.kind || "verse").toLowerCase(); if (!PLAN_KINDS[kind]) kind = "verse";
       var lead = String(rs.lead || "theme").toLowerCase(); if (!PLAN_LEAD[lead]) lead = "theme";
       var bars = clamp(Math.round(Number(rs.bars) || chords.length), 4, 24), dr = Number(rs.drums); if (!isFinite(dr)) dr = 2;
-      var pm = parseMel(rs.mel, bars), pbs = parseBassLine(rs.bassline, bars);
-      out.sections.push({ src: i, mel: pm ? pm.byBar : null, melBars: pm ? pm.bars : 0, bl: pbs ? pbs.byBar : null, blBars: pbs ? pbs.bars : 0, kind: kind, chords: chords, bars: bars, energy: clamp(typeof rs.energy === "number" ? rs.energy : .6, .1, 1), lead: lead, drums: clamp(Math.round(dr), 0, 2),
+      var pm = parseMel(rs.mel, bars), pbs = parseBassLine(rs.bassline, bars), pg = parseGroove(rs.groove), pg2 = pg ? parseGroove(rs.groove2) : null;
+      out.sections.push({ src: i, mel: pm ? pm.byBar : null, melBars: pm ? pm.bars : 0, bl: pbs ? pbs.byBar : null, blBars: pbs ? pbs.bars : 0, gv: pg ? { a: pg, b: pg2 } : null, kind: kind, chords: chords, bars: bars, energy: clamp(typeof rs.energy === "number" ? rs.energy : .6, .1, 1), lead: lead, drums: clamp(Math.round(dr), 0, 2),
         bass: rs.bass !== false, arp: rs.arp === true, comp: rs.comp !== false, fill: rs.fill !== false && kind !== "intro", crash: kind === "chorus" || kind === "drop" || kind === "solo" || rs.crash === true });
     }
     if (out.sections.length < 2) return null;
     var sig = function (x) { return x.kind + "|" + x.chords.map(function (c) { return c.rs + c.q; }).join(); }, seen = {};   /* a repeated section plays the same written melody */
-    out.sections.forEach(function (x) { if (x.mel || x.bl) { if (!seen[sig(x)]) seen[sig(x)] = x; } });
-    out.sections.forEach(function (x) { var o = seen[sig(x)]; if (!o) return; if (!x.mel && o.mel && x.lead !== "none") { x.mel = o.mel; x.melBars = o.melBars; } if (!x.bl && o.bl && x.bass) { x.bl = o.bl; x.blBars = o.blBars; } });
+    out.sections.forEach(function (x) { if (x.mel || x.bl || x.gv) { if (!seen[sig(x)]) seen[sig(x)] = x; } });
+    out.sections.forEach(function (x) { var o = seen[sig(x)]; if (!o) return; if (!x.mel && o.mel && x.lead !== "none") { x.mel = o.mel; x.melBars = o.melBars; } if (!x.bl && o.bl && x.bass) { x.bl = o.bl; x.blBars = o.blBars; } if (!x.gv && o.gv && x.drums > 0) x.gv = o.gv; });
     if (!out.mode) { var c0 = out.sections[0].chords[0].q; out.mode = (c0 === "min" || c0 === "m7" || c0 === "m9" || c0 === "m11" || c0 === "m6") ? "aeolian" : (c0 === "7" || c0 === "9" || c0 === "13") ? "mixolydian" : "ionian"; }
     var st = String(p.style || "").toLowerCase().replace(/[^a-z]/g, ""); st = ({ rockandroll: "rocknroll", hiphop2: "hiphop" })[st] || st; out.style = STYLES[st] && !STYLES[st].solo ? st : "";
     if (typeof p.bpm === "number" && isFinite(p.bpm)) out.bpm = clamp(Math.round(p.bpm), 50, 150);
@@ -554,7 +569,7 @@
     var pl = parsePlan(src); if (!pl) return { ok: false, score: 0, issues: ["The plan could not be read."], stats: {} };
     var sc = MODES[pl.mode] || MODES.ionian, n = sc.length, issues = [], pen = 0, stats = { sections: pl.sections.length, melodies: 0 };
     function semi(d) { var o = Math.floor(d / n); return sc[d - o * n] + 12 * o; }
-    var cur = "plan", parts = { plan: { pen: 0, issues: [] }, mel: { pen: 0, issues: [] }, bass: { pen: 0, issues: [] } };
+    var cur = "plan", parts = { plan: { pen: 0, issues: [] }, mel: { pen: 0, issues: [] }, bass: { pen: 0, issues: [] }, drums: { pen: 0, issues: [] } };
     function note(msg, w) { issues.push(msg); pen += w; parts[cur].pen += w; parts[cur].issues.push(msg); }
     var sections = pl.sections, avgPitch = {}, i, j;
     var chorusCount = 0, hasContrast = false, uniq = {};
@@ -611,11 +626,32 @@
       if (!offb && all.length > 5) note(tag + "every note is on the beat; add a syncopated note (steps 2, 6, 10, 14) for groove.", 4);
       if (Object.keys(durs).length < 2 && all.length > 5) note(tag + "every note has the same length; mix short and long notes.", 3);
     });
+    sections.forEach(function (sx) {
+      if (!sx.gv) return; cur = "drums"; stats.grooves = (stats.grooves || 0) + 1;
+      var tag = "Drums, section " + sx.src + " (" + sx.kind + "): ", st = pl.style || "";
+      [sx.gv.a, sx.gv.b].forEach(function (g, gi) {
+        if (!g) return; var t = tag + (gi ? "second bar " : ""), on = function (k, i) { return g[k] && g[k].charAt(i) !== "."; }, cnt = function (k) { return g[k] ? g[k].replace(/\./g, "").length : 0; }, total = 0, kk;
+        for (kk in g) total += cnt(kk);
+        var back = on("snare", 4) || on("snare", 12) || on("clap", 4) || on("clap", 12) || on("rim", 4) || on("rim", 12) || on("snare", 8) || on("clap", 8) || on("rim", 8);
+        if (!back) note(t + "no backbeat: put the snare or clap on steps 4 and 12 (or step 8 for half-time and one-drop).", 14);
+        if (!cnt("kick")) note(t + "no kick drum.", 10);
+        else if (!on("kick", 0) && !on("kick", 8) && st !== "reggae") note(t + "the kick should anchor beat 1 (step 0).", 8);
+        var time = cnt("hat") + cnt("ride") + cnt("shaker") + cnt("tamb") + cnt("open");
+        if (!time && st !== "ambient") note(t + "no timekeeping: add hi-hat, ride, shaker or tambourine so the groove has a pulse.", 8);
+        if (total > 64) note(t + "too busy (" + total + " hits in one bar); simplify so the groove can breathe.", 6);
+        if (cnt("kick") > 8) note(t + "too many kicks (" + cnt("kick") + "); a bar rarely needs more than 6.", 5);
+        if ((on("kick", 4) && on("snare", 4)) || (on("kick", 12) && on("snare", 12))) note(t + "the kick and snare hit together on the backbeat; keep the backbeat for the snare.", 5);
+        if ((st === "house" || st === "edm") && !(on("kick", 0) && on("kick", 4) && on("kick", 8) && on("kick", 12))) note(t + "house needs a four-on-the-floor kick (steps 0, 4, 8, 12).", 8);
+        if ((st === "funk" || st === "afrobeats" || st === "amapiano" || st === "hiphop" || st === "trap" || st === "rnb") && g.kick && !/[xXo]/.test(g.kick.replace(/(.)(.)(.)(.)/g, "$2$3$4"))) note(t + "the kick only plays on the beat; add a syncopated kick for groove.", 5);
+        if (g.snare && /[xX]/.test(g.snare.slice(0, 1)) && st !== "afrobeats") note(t + "the snare on beat 1 is unusual; the snare belongs on the backbeat.", 4);
+      });
+      if (sx.gv.b && sx.gv.b === sx.gv.a) note(tag + "the second bar is identical to the first.", 1);
+    });
     cur = "mel"; var ci = sections.indexOf(firstChorus), vi = sections.indexOf(firstVerse);
     if (ci >= 0 && vi >= 0 && avgPitch[ci] !== undefined && avgPitch[vi] !== undefined && avgPitch[ci] < avgPitch[vi] + 1) note("The chorus melody should sit higher than the verse melody so it lifts.", 6);
     var score = Math.max(0, Math.min(100, 100 - pen));
     var fin = function (k) { return { score: Math.max(0, 100 - parts[k].pen), issues: parts[k].issues.slice(0, 8) }; };
-    return { ok: true, score: score, issues: issues.slice(0, 8), stats: stats, mel: fin("mel"), bass: fin("bass"), plan: fin("plan") };
+    return { ok: true, score: score, issues: issues.slice(0, 8), stats: stats, mel: fin("mel"), bass: fin("bass"), drums: fin("drums"), plan: fin("plan") };
   }
   /* what a melody writer needs to see: for every chord, which scale degrees are its notes (safe on the beat) */
   function tonesOf(src) {
@@ -640,7 +676,24 @@
     plan.sections.forEach(function (x) { if (!x[field] && sn[sg(x)] && (field === "bl" ? x.bass : x.lead !== "none")) { x[field] = sn[sg(x)][field]; x[bfield] = sn[sg(x)][bfield]; } });
     return done;
   }
-  function setBass(map) { return setPart(map, "bl", "blBars", parseBassLine); }
+  function setBass(map) { var n = setPart(map, "bl", "blBars", parseBassLine); if (n) resaveIfLiked(); return n; }
+  function setDrums(map) {
+    var pc = P.piece; if (!pc || !pc.comp || !pc.comp.spec || !pc.comp.spec.plan || !map) return 0;
+    var plan = pc.comp.spec.plan, raw = P.lastBrief && (P.lastBrief.planSrc || P.lastBrief.plan), done = 0;
+    plan.sections.forEach(function (ps) {
+      var m = map[ps.src]; if (m === undefined) return;
+      var g = m === null ? null : parseGroove(m.groove || m), g2 = g && m.groove2 ? parseGroove(m.groove2) : null; if (m !== null && !g) return;
+      ps.gv = g ? { a: g, b: g2 } : null; done++;
+      if (raw && typeof raw === "object" && Array.isArray(raw.sections) && raw.sections[ps.src]) { var rs = raw.sections[ps.src]; if (!g) { delete rs.groove; delete rs.groove2; } else { rs.groove = m.groove || m; if (m.groove2) rs.groove2 = m.groove2; else delete rs.groove2; } }
+    });
+    var sg = function (x) { return x.kind + "|" + x.chords.map(function (c) { return c.rs + c.q; }).join(); }, sn = {};
+    plan.sections.forEach(function (x) { if (x.gv && !sn[sg(x)]) sn[sg(x)] = x; });
+    plan.sections.forEach(function (x) { if (!x.gv && sn[sg(x)] && x.drums > 0) x.gv = sn[sg(x)].gv; });
+    if (done) resaveIfLiked();
+    return done;
+  }
+  /* a piece liked before its written parts arrived is saved again with them */
+  function resaveIfLiked() { try { var pc = P.piece; if (!pc) return; var s0 = seedStr(pc); if (taste.seeds.some(function (x) { return x.s === s0; })) saveTaste(); } catch (e) {} }
   /* put (or replace) written melodies into the plan that is playing; they take effect from the next section */
   function setMelodies(map) {
     var pc = P.piece; if (!pc || !pc.comp || !pc.comp.spec || !pc.comp.spec.plan || !map) return 0;
@@ -654,6 +707,7 @@
     var sg = function (x) { return x.kind + "|" + x.chords.map(function (c) { return c.rs + c.q; }).join(); }, sn = {};
     plan.sections.forEach(function (x) { if (x.mel && !sn[sg(x)]) sn[sg(x)] = x; });
     plan.sections.forEach(function (x) { if (!x.mel && x.lead !== "none" && sn[sg(x)]) { x.mel = sn[sg(x)].mel; x.melBars = sn[sg(x)].melBars; } });
+    if (done) resaveIfLiked();
     return done;
   }
 
@@ -1242,6 +1296,8 @@
     function drumBar(sec, firstBar, lastBar) {
       var dOnly = !!spec.drums, D = S.style.drum, out = [], alts = DRUM_ALT[S.styleName], av = alts ? (sec.drumVar + (dOnly ? Math.floor(S.secBar / 4) : 0)) % (alts.length + 1) : 0;
       if (av > 0) { var D2 = {}, dk; for (dk in D) D2[dk] = D[dk]; for (dk in alts[av - 1]) D2[dk] = alts[av - 1][dk]; D = D2; }
+      var gv = sec.gv ? (((S.secBar % 2) === 1 && sec.gv.b) ? sec.gv.b : sec.gv.a) : null;
+      if (gv) { var D3 = {}, gk; for (gk in GROOVE_KEYS) D3[gk] = gv[gk] || ""; D3.rimV = D.rimV !== undefined && gv.rim ? D.rimV : .6; D = D3; }
       var _u = [], level = sec.layers.drums, i, s, e = sec.e;
       var dyn = sec.dyn, pb = S.secBar % 4, endOfGroup = (pb === 3);
       function hit(step, r, k, v, extra) { var o = { s: step, r: r, k: k, v: Math.min(1, v * (1 + (rng() - .5) * .14)), p: (r === "perc" ? 3 : 1) }; if (extra) for (var q in extra) o[q] = extra[q]; out.push(o); }
@@ -1249,7 +1305,7 @@
         if (!str) return;
         for (var st = 0; st < 16; st++) {
           var c = str.charAt(st); if (c === "." || (filter && !filter(st))) continue;
-          var acc = c === "o" ? .42 : (st % 4 === 0 ? 1 : st % 2 === 0 ? .82 : .64);
+          var acc = c === "o" ? .42 : c === "X" ? 1.08 : (st % 4 === 0 ? 1 : st % 2 === 0 ? .82 : .64);
           hit(st, r, k, vel * acc, r === "perc" ? { pan: (st % 4 < 2 ? -1 : 1) * .3 } : null);
         }
       }
@@ -1258,7 +1314,7 @@
       if ((sec.kind === "drop" || sec.kind === "climax") && firstBar) out.push({ s: 0, r: "fx", k: "impact", v: (S.styleName === "cinematic" || S.arcName === "story") ? .8 : .42, p: 1 });
       if (dOnly && level > 0 && level < 3) level = 2;
       if (level <= 0) return out;
-      if (S.style.drumGen === "jazz" && level < 3) return jazzDrums(out, hit, sec, level, firstBar, lastBar, pb);
+      if (S.style.drumGen === "jazz" && level < 3 && !gv) return jazzDrums(out, hit, sec, level, firstBar, lastBar, pb);
       var inBuild = level === 3 && !(dOnly && S.secBar < sec.bars - 2);
       if (inBuild) {
         var bb = S.secBar, last2 = sec.bars - 2;
@@ -1281,15 +1337,16 @@
       if (!light && D.tamb) pattern(D.tamb, "perc", "tamb", .38 * dyn + .1);
       if (!light && D.cow) pattern(D.cow, "perc", "cow", .42);
       if (dOnly && e > .4) { var ox = ["shaker", "tamb", "cow", "conga"][sec.drumVar % 4], op = ["x.x.x.x.x.x.x.x.", "..x...x...x...x.", "x..x..x..x..x..x", "x.xx.xx.x.xx.xx."][(sec.drumVar + S.secNo) % 4]; pattern(op, "perc", ox, .4 * dyn + .1, null); }
+      if (D.ride) pattern(D.ride, "perc", "ride", (light ? .4 : .55) * dyn + .1);
       if (D.rim) pattern(D.rim, "perc", "rim", D.rimV !== undefined ? D.rimV : .5 * dyn + .1);
       /* ghost notes: very quiet snare taps between the backbeats give a played feel */
       var GH = { lofi: [2, 7, 10, 15], rnb: [6, 7, 14, 15], afrobeats: [3, 10, 15], amapiano: [], acoustic: [], funk: [3, 6, 7, 9, 14, 15], hiphop: [7, 10, 15], rock: dOnly ? [3, 7, 11, 15] : [], pop: dOnly ? [3, 10, 15] : [], rocknroll: [], blues: [] }[S.styleName];
-      if (!light && GH && D.snare) for (var gi = 0; gi < GH.length; gi++) if (D.snare.charAt(GH[gi]) === "." && rng.chance((dOnly ? .4 : S.styleName === "funk" ? .35 : .22) * (.6 + e))) hit(GH[gi], "drums", "snare", .15 + rng() * .1);
+      if (!gv && !light && GH && D.snare) for (var gi = 0; gi < GH.length; gi++) if (D.snare.charAt(GH[gi]) === "." && rng.chance((dOnly ? .4 : S.styleName === "funk" ? .35 : .22) * (.6 + e))) hit(GH[gi], "drums", "snare", .15 + rng() * .1);
       if (D.shaker && (!light || e > .3)) pattern(D.shaker, "perc", "shaker", .46 * dyn + .1);
-      if (!light && e > .5) { pattern(D.cLo, "perc", "conga", .6, null); if (D.cHi) pattern(D.cHi, "perc", "conga", .5, null); }
+      if (!light && (gv ? D.cLo || D.cHi : e > .5)) { pattern(D.cLo, "perc", "conga", .6, null); if (D.cHi) pattern(D.cHi, "perc", "conga", .5, null); }
       if (D.tom && (!light || firstBar)) pattern(D.tom, "drums", "tom", .8, null);
       /* ghost kick for movement */
-      if (!light && D.kick && S.styleName !== "house" && rng.chance(.16)) { var gh = rng.pick([10, 11, 14, 15]); if (D.kick.charAt(gh) === ".") hit(gh, "drums", "kick", .55); }
+      if (!gv && !light && D.kick && S.styleName !== "house" && rng.chance(.16)) { var gh = rng.pick([10, 11, 14, 15]); if (D.kick.charAt(gh) === ".") hit(gh, "drums", "kick", .55); }
       /* fills at the end of a 4-bar group */
       var fillNow = sec.tpl.fill && !light && ((endOfGroup && (lastBar || dOnly || rng.chance(.5))) || (dOnly && pb === 1 && rng.chance(.4)));
       if (fillNow) {
@@ -1345,6 +1402,7 @@
       };
       if (ps && ps.mel) { S.sec.mel = ps.mel; S.sec.melBars = ps.melBars; }
       if (ps && ps.bl) { S.sec.bl = ps.bl; S.sec.blBars = ps.blBars; }
+      if (ps && ps.gv) S.sec.gv = ps.gv;
       if (ps) { S.sec.layers.comp = ps.comp; S.sec.layers.arp = ps.arp && !!S.pal.arp; S.sec.layers.bass = ps.bass && e >= .15; S.sec.loop = 0; }
       if (tpl.k === "intro" && S.style.drums === 2 && !S.sec.layers.comp && !ps) S.sec.layers.arp = true;
       S.sec.layers.ans = !!S.pal.ans && rng.chance(.25 + .55 * e);
@@ -2347,6 +2405,47 @@
     var s = seedStr(pc); if (!taste.seeds.some(function (x) { return x.s === s; })) taste.seeds.unshift({ s: s, t: inf.title, b: P.lastBrief || {} });
     taste.seeds = taste.seeds.slice(0, 30); saveTaste(); emit("like", { info: info() }); return true;
   }
+  /* ── liked pieces teach the composer ──
+   * Saved pieces keep their full written plan (chords, melody, bass line, groove). The composer reads them back as examples of what this listener enjoys. */
+  function likedPlans() {
+    var out = [], i; for (i = 0; i < taste.seeds.length; i++) { var e = taste.seeds[i], raw = e && e.b && (e.b.planSrc || e.b.plan); if (raw && typeof raw === "object" && Array.isArray(raw.sections)) out.push({ t: e.t, raw: raw }); }
+    return out;
+  }
+  function likedExamples(n, part) {
+    var res = [], L = likedPlans().slice(0, clamp(n || 2, 1, 4));
+    L.forEach(function (x) {
+      var r = x.raw, ex = { title: x.t, style: r.style || "", key: r.key || "", mode: r.mode || "", bpm: r.bpm || 0 };
+      if (!part || part === "plan") { ex.band = r.band || {}; ex.motif = r.motif || null; }
+      var secs = [], seenK = {};
+      (r.sections || []).forEach(function (sx) {
+        if (!sx || !Array.isArray(sx.chords) || seenK[sx.kind] || secs.length >= 2) return;
+        if (sx.kind !== "verse" && sx.kind !== "chorus" && sx.kind !== "drop") return;
+        var o = { kind: sx.kind, chords: sx.chords.slice(0, 4) };
+        if (part === "mel" || !part) { if (Array.isArray(sx.mel) && sx.mel.length) o.mel = sx.mel.filter(function (n) { return n[0] < 2; }).slice(0, 18); }
+        if (part === "bass" || !part) { if (Array.isArray(sx.bassline) && sx.bassline.length) o.bassline = sx.bassline.filter(function (n) { return n[0] < 1; }).slice(0, 12); }
+        if (part === "drums" || !part) { if (sx.groove) o.groove = sx.groove; }
+        if (part === "plan" || !part) { o.energy = sx.energy; o.bars = sx.bars; }
+        if (part && part !== "plan" && !(o.mel || o.bassline || o.groove)) return;
+        seenK[sx.kind] = 1; secs.push(o);
+      });
+      if (secs.length) { ex.sections = secs; res.push(ex); }
+    });
+    return res;
+  }
+  function tasteProfile() {
+    var L = likedPlans(); if (!L.length) return null;
+    var st = {}, bpms = [], modes = { minor: 0, major: 0 }, sev = 0, tot = 0, inst = {};
+    L.forEach(function (x) {
+      var r = x.raw; if (r.style) st[r.style] = (st[r.style] || 0) + 1; if (r.bpm) bpms.push(r.bpm);
+      var md = String(r.mode || "").toLowerCase(); if (/min|aeol|dor|phryg/.test(md)) modes.minor++; else modes.major++;
+      if (r.band) for (var k in r.band) { var v = r.band[k]; if (v && v !== "none") { inst[k] = inst[k] || {}; inst[k][v] = (inst[k][v] || 0) + 1; } }
+      (r.sections || []).forEach(function (sx) { (sx.chords || []).forEach(function (c) { tot++; if (/7|9|11|13/.test(String(c))) sev++; }); });
+    });
+    var fav = {}; for (var rk in inst) fav[rk] = Object.keys(inst[rk]).sort(function (a, b) { return inst[rk][b] - inst[rk][a]; })[0];
+    return { pieces: L.length, styles: Object.keys(st).sort(function (a, b) { return st[b] - st[a]; }).slice(0, 3),
+      bpm: bpms.length ? [Math.min.apply(null, bpms), Math.max.apply(null, bpms)] : null, leans: modes.minor > modes.major ? "minor, darker" : modes.major > modes.minor ? "major, brighter" : "both",
+      harmony: tot ? (sev / tot > .5 ? "rich (7ths, 9ths)" : sev / tot > .2 ? "mixed" : "simple triads") : "", favouriteInstruments: fav };
+  }
   function saved() { return taste.seeds.slice(); }
   function playSaved(i) { var e = taste.seeds[i]; if (!e) return null; var b = {}; for (var k in e.b) b[k] = e.b[k]; b.seed = strToSeed(e.s); return play(b); }
   function tasteSummary() {
@@ -2501,7 +2600,7 @@
     current: function () { var pc = P.piece; if (!pc || !P.lastBrief) return null; var b = {}; for (var k in P.lastBrief) b[k] = P.lastBrief[k]; b.seed = pc.seed; return b; },
     like: like, saved: saved, playSaved: playSaved, tasteSummary: tasteSummary, info: info, level: level,
     on: function (fn) { P.listeners.push(fn); return function () { API.off(fn); }; }, off: function (fn) { P.listeners = P.listeners.filter(function (x) { return x !== fn; }); },
-    critique: critique, setMelodies: setMelodies, setBass: setBass, tonesOf: tonesOf, parseBrief: parseBrief, moods: MOOD_LIST.slice(), styles: STYLE_LIST.map(function (k) { return { id: k, name: STYLES[k].name }; }),
+    critique: critique, setMelodies: setMelodies, setBass: setBass, setDrums: setDrums, likedExamples: likedExamples, tasteProfile: tasteProfile, tonesOf: tonesOf, parseBrief: parseBrief, moods: MOOD_LIST.slice(), styles: STYLE_LIST.map(function (k) { return { id: k, name: STYLES[k].name }; }),
     samples: { setBase: function (u) { SMP.base = u; }, memory: function () { return { mb: +(smpBytes() / 1048576).toFixed(1), budgetMB: +(smpBudget() / 1048576).toFixed(0), banks: Object.keys(SMP.banks).filter(function (k) { return SMP.banks[k].ready; }).length }; }, setBudgetMB: function (n) { SMP.budgetMB = n; }, enable: function (on) { SMP.on = !!on; }, enabled: function () { return SMP.on; }, status: function () { var o = {}; for (var k in SMP.banks) o[k] = SMP.banks[k].ready ? "ready" : SMP.banks[k].failed ? "failed" : "loading"; return o; }, preload: function (names) { var c = ensureCtx(); if (c) (names || Object.keys(SMAP).map(function (k) { return SMAP[k].bank; }).concat(["drums-acoustic", "drums-lm2"])).forEach(function (b) { smpGet(b, c); }); } },
     mix: mix, mixNext: mixNext, mixInfo: mixInfo, buildMixPlan: buildMixPlan, renderMix: renderMix,
     render: render, toWav: toWav, exportWav: exportWav, exportMixWav: exportMixWav,

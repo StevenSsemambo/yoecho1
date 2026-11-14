@@ -972,7 +972,7 @@ function loadEchoMusic(){
   if(_musicPromise) return _musicPromise;
   _musicPromise=new Promise((res,rej)=>{
     const el=document.createElement("script");
-    el.src="/echo-music.js?v=18"; el.async=true;
+    el.src="/echo-music.js?v=19"; el.async=true;
     el.onload=()=>{ if(window.EchoMusic){ window.dispatchEvent(new Event("echomusic-ready")); res(window.EchoMusic); } else rej(new Error("music engine missing")); };
     el.onerror=()=>rej(new Error("could not load the music engine"));
     document.head.appendChild(el);
@@ -1090,7 +1090,7 @@ async function fetchMusicPlan(ask,mood,style){
   try{
     const ctl=new AbortController(), to=setTimeout(()=>ctl.abort(),9500);
     const res=await fetch("/.netlify/functions/chat",{method:"POST",headers:{"Content-Type":"application/json"},signal:ctl.signal,
-      body:JSON.stringify({system:PLAN_SYSTEM,messages:[{role:"user",content:JSON.stringify({request:String(ask||"").slice(0,300)||"surprise me with something that fits the mood",mood:mood||"neutral",preferredStyle:style||"your choice",variation:Math.floor(Math.random()*1e6)})}]})});
+      body:JSON.stringify({system:PLAN_SYSTEM+TASTE_NOTE,messages:[{role:"user",content:JSON.stringify({request:String(ask||"").slice(0,300)||"surprise me with something that fits the mood",mood:mood||"neutral",preferredStyle:style||"your choice",variation:Math.floor(Math.random()*1e6),...tasteFor("plan",2)})}]})});
     clearTimeout(to); if(!res.ok) return null;
     const d=await res.json(), t=String(d.text||""), a=t.indexOf("{"), z=t.lastIndexOf("}"); if(a<0||z<a) return null;
     const plan=JSON.parse(t.slice(a,z+1)); return plan&&Array.isArray(plan.sections)&&plan.sections.length>=2?plan:null;
@@ -1133,7 +1133,7 @@ async function aiJson(system,payload,ms,tokens){
     return JSON.parse(t.slice(a,z+1));
   }catch(e){ return null; }
 }
-function stripMel(plan){ const c=JSON.parse(JSON.stringify(plan)); (c.sections||[]).forEach(x=>{ if(x&&typeof x==="object") delete x.mel; }); return c; }
+function stripMel(plan){ const c=JSON.parse(JSON.stringify(plan)); (c.sections||[]).forEach(x=>{ if(x&&typeof x==="object"){ delete x.mel; delete x.bassline; delete x.groove; delete x.groove2; } }); return c; }
 function melTargets(an){
   const out=[]; let v=false,c=false,o=false;
   (an&&an.sections||[]).forEach(s=>{ if(s.lead==="none") return;
@@ -1143,9 +1143,10 @@ function melTargets(an){
 }
 function withMel(plan,map){ const c=JSON.parse(JSON.stringify(plan)); for(const k in map){ const sx=c.sections&&c.sections[k]; if(sx) sx.mel=map[k]; } return c; }
 async function fetchMelodies(an,targets,extra){
-  const payload={key:an.key,mode:an.mode,scaleLength:an.scale,sections:targets.map(s=>({index:s.src,kind:s.kind,bars:Math.min(s.bars,s.kind==="verse"||s.kind==="chorus"?4:4),
+  const payload={key:an.key,mode:an.mode,scaleLength:an.scale,sections:targets.map(s=>({index:s.src,kind:s.kind,bars:Math.min(s.bars,4),
     tones:s.chords.slice(0,4)})),...(extra||{})};
-  const r=await aiJson(MELODY_SYSTEM,payload,12000,2200);
+  Object.assign(payload,tasteFor("mel",2),extra||{});
+  const r=await aiJson(MELODY_SYSTEM+TASTE_NOTE,payload,12000,2200);
   return r&&r.mel&&typeof r.mel==="object"?r.mel:null;
 }
 const BASS_SYSTEM=`You are a great session bassist writing the BASS LINE for sections of a piece whose chords are fixed. Return ONE JSON object and nothing else: {"bass":{"<sectionIndex>":[[bar,step,tone,length],...]}}.
@@ -1157,7 +1158,8 @@ Play like a pro for the genre:
 If the message contains "critic" notes and a "previous" line, rewrite it to fix exactly those problems and keep what works. Never explain.`;
 async function fetchBass(plan,targets,extra){
   const payload={style:plan.style||"",bpm:plan.bpm||0,bass:(plan.band&&plan.band.bass)||"",sections:targets.map(t=>({index:t.index,kind:t.kind,energy:t.energy,chords:t.chords})),...(extra||{})};
-  const r=await aiJson(BASS_SYSTEM,payload,12000,1200);
+  Object.assign(payload,tasteFor("bass",2));
+  const r=await aiJson(BASS_SYSTEM+TASTE_NOTE,payload,12000,1200);
   return r&&r.bass&&typeof r.bass==="object"?r.bass:null;
 }
 function bassTargets(plan){
@@ -1168,6 +1170,38 @@ function bassTargets(plan){
   return out;
 }
 function withBass(plan,map){ const c=JSON.parse(JSON.stringify(plan)); for(const k in map){ const sx=c.sections&&c.sections[k]; if(sx) sx.bassline=map[k]; } return c; }
+const TASTE_NOTE=`
+
+LISTENER TASTE: the message may contain "listenerTaste" and "likedExamples": pieces this listener saved because they loved them. Treat them as evidence of what they enjoy (tempo range, major or minor lean, harmonic richness, favourite instruments, rhythmic feel, melodic shape). Write something NEW in the same spirit; never copy an example note for note, and if the request names a genre, stay true to that genre first.`;
+function tasteFor(part,n){
+  try{ const M=window.EchoMusic; if(!M||!M.likedExamples) return {}; const ex=M.likedExamples(n||2,part), tp=M.tasteProfile&&M.tasteProfile();
+    const o={}; if(tp) o.listenerTaste=tp; if(ex&&ex.length) o.likedExamples=ex; return o; }catch(e){ return {}; }
+}
+const DRUM_SYSTEM=`You are a great session drummer writing the DRUM GROOVE for sections of a piece. Return ONE JSON object and nothing else: {"drums":{"<sectionIndex>":{"groove":{...},"groove2":{...}}}}.
+A groove is one bar on a 16-step grid (steps 0-15 are sixteenth notes; beats are 0,4,8,12). Each voice is a string of exactly 16 characters: "x" = hit, "X" = accent, "o" = soft ghost note, "." = rest. Voices: kick, snare, clap, hat (closed hi-hat), open (open hi-hat), ride, rim (rimshot/sidestick), tamb, shaker, cow, tom, cLo, cHi (congas). Use only the voices you need. "groove2" is optional: a variation played every second bar (e.g. an extra kick or a ghost note); keep the same backbone.
+Play like a pro for the genre:
+- Rock/pop: kick on 0 and 8 (plus a pickup at 10), snare on 4 and 12, steady eighth hats "x.x.x.x.x.x.x.x.". Rock and roll/blues: snare on 4 and 12, ride or hat on eighths.
+- Funk: syncopated kick (0, 3, 6, 10), snare on 4 and 12 with ghost notes (o) around it, busy sixteenth hats with accents.
+- Hip-hop/boom-bap: kick 0, 3 (or 7), 10, snare 4 and 12, sparse hats. Trap: half-time snare on step 8 only, sparse kicks, dense hats (sixteenths with gaps).
+- Afrobeats: kick 0, 6 (or 7), 10, clap or rim on 4 and 12, shaker or hat on sixteenths with ghost notes, congas for color. Amapiano: soft kick on 0 and 8, shaker driving, rim on 12, sparse.
+- Reggae (one drop): NO kick on step 0; kick and rim together on step 8, hats on eighths, shaker light. Lo-fi/R&B: lazy kick 0, 7 or 10, snare 4 and 12 soft, hats with ghost notes.
+- House: four-on-the-floor kick (0,4,8,12), clap on 4 and 12, open hat on the off-beats (2,6,10,14), closed hat on sixteenths. Jazz: ride "x...x.xx...x.x..", hat pedal on 4 and 12, very soft kick and an occasional snare ghost.
+- Ballads/cinematic/ambient: half-time, kick on 0 and 8 or less, rim or snare on 12 only, minimal hats.
+Rules: always give a backbeat (snare, clap or rim on 4 and 12, or on 8 for half-time/one-drop), keep a pulse (hat/ride/shaker/tamb), never put kick and snare together on the backbeat, keep it under about 45 hits per bar. Make the chorus groove bigger or busier than the verse groove (open hats, more kicks, clap layered with snare).
+If the message contains "critic" notes and a "previous" groove, rewrite it to fix exactly those problems and keep what works. Never explain.`+TASTE_NOTE;
+async function fetchDrums(plan,targets,extra){
+  const payload={style:plan.style||"",bpm:plan.bpm||0,sections:targets,...tasteFor("drums",2),...(extra||{})};
+  const r=await aiJson(DRUM_SYSTEM,payload,12000,1500);
+  return r&&r.drums&&typeof r.drums==="object"?r.drums:null;
+}
+function drumTargets(plan){
+  const out=[]; let v=false,c=false;
+  (plan.sections||[]).forEach((sx,i)=>{ if(!sx||Number(sx.drums)===0||!Array.isArray(sx.chords)) return;
+    const k=String(sx.kind||"verse").toLowerCase(), t={index:i,kind:k,energy:sx.energy,drumLevel:sx.drums===1?"light":"full"};
+    if(k==="verse"&&!v){ v=true; out.push(t); } else if((k==="chorus"||k==="drop")&&!c){ c=true; out.push(t); } });
+  return out;
+}
+function withDrums(plan,map){ const c=JSON.parse(JSON.stringify(plan)); for(const k in map){ const sx=c.sections&&c.sections[k]; if(sx&&map[k]){ sx.groove=map[k].groove||map[k]; if(map[k].groove2) sx.groove2=map[k].groove2; } } return c; }
 // Background: the piece starts at once with the engine's own hook and bass; the written parts land from the next section on.
 async function polishMelody(plan){
   const M=window.EchoMusic; if(!M||!M.critique||!plan||typeof plan!=="object") return;
@@ -1202,7 +1236,21 @@ async function polishMelody(plan){
       M.setBass(best); window.__lastBassScore=res.score;
     }catch(e){}
   };
-  await Promise.all([melPass(),bassPass()]);
+  const drumPass=async()=>{
+    try{
+      if(!M.setDrums) return;
+      const base=stripMel(plan), targets=drumTargets(base); if(!targets.length) return;
+      let best=await fetchDrums(base,targets); if(!best) return;
+      let res=M.critique(withDrums(base,best)).drums;
+      if(res.issues.length){
+        const again=await fetchDrums(base,targets,{critic:res.issues,previous:best});
+        if(again){ const r2=M.critique(withDrums(base,again)).drums; if(r2.score>res.score){ best=again; res=r2; } }
+      }
+      if(res.score<50||!stillOn()) return;
+      M.setDrums(best); window.__lastDrumScore=res.score;
+    }catch(e){}
+  };
+  await Promise.all([melPass(),bassPass(),drumPass()]);
 }
 // Runs a music command. Returns a small descriptor that the chat shows as a card or a chip.
 async function runMusic(cmd,curMood){
