@@ -287,3 +287,8 @@ Decoded audio is raw floats, so all 24 banks together would need about 180 MB. B
 ## v19 — Voices appear on their own
 - Voices no longer depend on the model choosing them. The engine decides when a human voice helps: choir/ooh/synth-choir pads under big sections (chorus, drop, climax, bridge, and verses/breaks in R&B, lo-fi and acoustic), plus a hummed double on the hook in pop, R&B, afrobeats, amapiano, lo-fi and acoustic. Likelihood depends on style and mood (cinematic, sad, loving and hopeful pieces most; jazz, funk and rock and roll rarely). Sample banks are warmed from the first bar so the recorded voices are ready.
 - The listener can steer them: `layers: {voice: false}` ("remove the voices"), true to bring them back.
+
+## v20 — Voices you can actually hear
+- Found by measurement: voices were quiet (3-10% of the mix power), routed through the pad strip (low level, sidechain-ducked by the kick), and on phones (lite quality) the polyphony limiter dropped over half of them. Now: voice notes play on the lead strip (no ducking), stereo-spread, count as one voice each in the limiter and are only dropped at an extreme load, and are louder.
+- The first big section of a piece always carries a voice (when the style suits it) so you hear them early; later sections are by chance.
+- Tune by ear from the browser console: `EchoMusic.voices.set({amount: 1.5, level: 1.3})` (amount scales how often voices appear, 0 = never; level scales loudness). Saved in the browser. `EchoMusic.voices.get()` shows the current values.

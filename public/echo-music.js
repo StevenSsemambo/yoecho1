@@ -426,6 +426,7 @@
 
   /* ═══════════════ taste (what the person liked or skipped; kept in localStorage) ═══════════════ */
   var TASTE_KEY = "yoecho_music_taste";
+  var VOX = { amt: 1, lvl: 1 }; try { var vx0 = JSON.parse(global.localStorage.getItem("echo_vox_v1") || "null"); if (vx0) { VOX.amt = clamp(Number(vx0.amt), 0, 2) || 0; VOX.lvl = clamp(Number(vx0.lvl) || 1, .3, 3); } } catch (e) {}
   var taste = { styles: {}, moods: {}, seeds: [] };
   function loadTaste() { try { var t = JSON.parse(global.localStorage.getItem(TASTE_KEY) || "null"); if (t && t.styles) taste = { styles: t.styles || {}, moods: t.moods || {}, seeds: t.seeds || [] }; } catch (e) {} }
   function saveTaste() { try { global.localStorage.setItem(TASTE_KEY, JSON.stringify(taste)); } catch (e) {} }
@@ -1458,17 +1459,19 @@
       for (r in ps.band) { var to = ps.band[r] === "none" ? null : ps.band[r]; if (S.pal[r] === to) continue; S.palOver[r] = { was: S.pal[r], to: to }; S.pal[r] = to; }
     }
     /* the engine's own sense of when a human voice helps: oohs or a choir under the big sections, a hummed double on the hook. Independent of the plan, so voices show up even when the model does not ask. */
-    var VSTY = { pop: .6, rnb: .7, acoustic: .6, cinematic: .85, ambient: .7, afrobeats: .55, amapiano: .5, lofi: .45, reggae: .35, trap: .35, house: .3, edm: .3, hiphop: .3, blues: .3, rock: .2, jazz: .15, funk: .15, rocknroll: 0 };
+    var VSTY = { pop: .5, rnb: .7, acoustic: .5, cinematic: .85, ambient: .7, afrobeats: .45, amapiano: .5, lofi: .45, reggae: .35, trap: .35, house: .3, edm: .3, hiphop: .3, blues: .3, rock: .2, jazz: .15, funk: .15, rocknroll: 0 };
     function isVoiceName(n) { return n === "vox" || n === "hum" || n === "ooh" || n === "choir" || n === "synthchoir"; }
     function voxBase() { var sn = S.styleName, mood = spec.stages[Math.max(0, S.stage)].mood, b = VSTY[sn] === undefined ? .3 : VSTY[sn]; if (mood === "sadness" || mood === "love" || mood === "hope") b += .15; else if (mood === "anger") b -= .2; return clamp(b, 0, .9); }
     function pickVoice(sec, ps) {
       if (SOLO || spec.drums || (S.style && S.style.solo)) return null;
       if (ps && (ps.dbl || (ps.band && (isVoiceName(ps.band.pad) || isVoiceName(ps.band.lead) || isVoiceName(ps.band.comp) || isVoiceName(ps.band.ans))))) return null;
       if (isVoiceName(S.pal.pad) || isVoiceName(S.pal.lead) || isVoiceName(S.pal.comp) || isVoiceName(S.pal.ans)) return null;
-      var sn = S.styleName, mood = spec.stages[Math.max(0, S.stage)].mood, w = /chorus|drop|climax|swell|rise/.test(sec.kind) ? 1 : (sec.kind === "bridge" && sec.e > .5) ? .8 : /break|release/.test(sec.kind) ? .6 : (sec.kind === "verse" && ({ rnb: 1, lofi: 1, acoustic: 1 })[sn]) ? .6 : 0;
+      var sn = S.styleName, mood = spec.stages[Math.max(0, S.stage)].mood, w = /chorus|drop|climax|swell|rise/.test(sec.kind) ? 1 : (sec.kind === "bridge" && sec.e > .5) ? .8 : /break|release/.test(sec.kind) ? .6 : (sec.kind === "verse" && ({ rnb: 1, lofi: 1, acoustic: 1, pop: 1, afrobeats: 1, amapiano: 1, cinematic: 1 })[sn]) ? .3 : 0;
       if (!w) return null;
-      var b = voxBase();
-      if (!rng.chance(b * w * (sec.e > .7 ? 1 : .75))) return null;
+      var b = voxBase() * VOX.amt; if (b <= 0) return null;
+      var first = !S.voxShown && b >= .45 && w >= .8;
+      if (!first && !rng.chance(Math.min(.95, b * 1.15) * w * (sec.e > .7 ? 1 : .8))) return null;
+      S.voxShown = true;
       var inst = (sn === "cinematic" || mood === "sadness" || mood === "fear") ? "choir" : (sn === "ambient" || sn === "acoustic") ? "ooh" : (rng.chance(.5) ? "ooh" : "synthchoir");
       var dbl = ({ afrobeats: 1, amapiano: 1, rnb: 1, lofi: 1, acoustic: 1, pop: 1 })[sn] && sec.lead !== "none" && rng.chance(.55) ? { i: "hum", o: rng.pick([0, 12]) } : null;
       return { i: inst, dbl: dbl };
@@ -1539,8 +1542,8 @@
       if (sec.vox) {
         if (chordStart || !S.voxV) { S.voxV = voice(chord, sec.vox.i === "choir" ? 60 : 64, S.voxV, 10, false); }
         var vt = S.voxV.slice(-3), vi2;
-        if (chordStart) for (vi2 = 0; vi2 < vt.length; vi2++) ev.push({ s: 0, r: "pad", i: sec.vox.i, m: vt[vi2], d: harm * 16 - 1, v: BASE_VEL.pad * sec.dyn * .75, p: 2, vx: 1 });
-        if (sec.vox.dbl) { var snap = ev.slice(); snap.forEach(function (e) { if (e.r === "lead" && !e.ans && !e.vx && e.i !== "hum" && e.m !== undefined) ev.push({ s: e.s, r: "lead", i: "hum", m: e.m + sec.vox.dbl.o, d: e.d, v: e.v * .5, p: 2, vx: 1 }); }); }
+        if (chordStart) for (vi2 = 0; vi2 < vt.length; vi2++) ev.push({ s: 0, r: "lead", i: sec.vox.i, m: vt[vi2], d: harm * 16 - 1, v: BASE_VEL.pad * sec.dyn * 1.1 * VOX.lvl, p: 1, vx: 1, cost: 1, pan: (vi2 - 1) * .3 });
+        if (sec.vox.dbl) { var snap = ev.slice(); snap.forEach(function (e) { if (e.r === "lead" && !e.ans && !e.vx && e.i !== "hum" && e.m !== undefined) ev.push({ s: e.s, r: "lead", i: "hum", m: e.m + sec.vox.dbl.o, d: e.d, v: e.v * .55 * VOX.lvl, p: 1, vx: 1, cost: 1, pan: .15 }); }); }
       }
       /* transitions: the bar before a drop leaves a gap and a reversed cymbal pulls into it; a break opens with a falling sweep */
       if (lastBar && sec.kind === "build") {
@@ -2290,7 +2293,7 @@
     E.admit = function (ev, t, cost, dur) {
       var n = 0, k; for (k = voices.length - 1; k >= 0; k--) { if (voices[k] < t - .05) voices.splice(k, 1); else n++; }
       var prio = ev.p || 2;
-      if ((prio >= 3 && n > cap * .6) || (prio === 2 && n > cap * .85) || n > cap * 1.3) return false;
+      if (ev.vx) { if (n > cap * 1.8) return false; } else if ((prio >= 3 && n > cap * .6) || (prio === 2 && n > cap * .85) || n > cap * 1.3) return false;
       voices.push(t + dur); if (cost > 1) for (k = 1; k < cost; k++) voices.push(t + dur); return true;
     };
 
@@ -2306,12 +2309,12 @@
       var name = ev.i, fn = INST[name]; if (!fn) return;
       var sec = ev.d * bar.stepDur, o = ev.r === "bass" ? E.bassOut() : E.strips[ROLE_STRIP[ev.r]].in;
       var sp = SMAP[name], smp = sp && E.samples && SMP.on && SMP.banks[sp.bank] && SMP.banks[sp.bank].ready;
-      if (!E.admit(ev, t, smp ? sp.cost : (COST[name] || 2), sec + .3)) return;
+      if (!E.admit(ev, t, ev.cost || (smp ? sp.cost : (COST[name] || 2)), sec + .3)) return;
       var rp = E.strips[ROLE_STRIP[ev.r]], pv = ev.pan !== undefined ? ev.pan : (rp && rp.pan !== undefined && !ev.ans ? rp.pan : E.lite ? 0 : ev.r === "pad" ? ((ev.m % 5) - 2) * .15 : ev.r === "comp" ? ((ev.m % 3) - 1) * .16 : (ev.r === "lead" && ev.ans) ? -.28 : 0);
       if (pv && ctx.createStereoPanner) { var pn = ctx.createStereoPanner(); pn.pan.value = clamp(pv, -1, 1); pn.connect(o); o = pn; }
       E.curGl = ev.gl || 0; E.curDet = (Math.random() - .5) * 6;
       try {
-        if (!(smp && E.sampleNote(name, mtof(ev.m), t, sec, clamp(ev.v, .02, 1.2), o))) { fn(E, mtof(ev.m), t, sec, clamp(ev.v, .02, 1.2) * (LOUD[name] || 1), o); }
+        if (!(smp && E.sampleNote(name, mtof(ev.m), t, sec, clamp(ev.v * (ev.vx ? 1.4 : 1), .02, 1.2), o))) { fn(E, mtof(ev.m), t, sec, clamp(ev.v * (ev.vx ? 1.4 : 1), .02, 1.2) * (LOUD[name] || 1), o); }
       } finally { E.curGl = 0; E.curDet = 0; }
     };
     function stepTime(s, bar) {
@@ -2743,6 +2746,7 @@
     current: function () { var pc = P.piece; if (!pc || !P.lastBrief) return null; var b = {}; for (var k in P.lastBrief) b[k] = P.lastBrief[k]; b.seed = pc.seed; return b; },
     like: like, saved: saved, playSaved: playSaved, tasteSummary: tasteSummary, info: info, level: level,
     on: function (fn) { P.listeners.push(fn); return function () { API.off(fn); }; }, off: function (fn) { P.listeners = P.listeners.filter(function (x) { return x !== fn; }); },
+    voices: { set: function (o) { o = o || {}; if (o.amount !== undefined) VOX.amt = clamp(Number(o.amount) || 0, 0, 2); if (o.level !== undefined) VOX.lvl = clamp(Number(o.level) || 1, .3, 3); try { global.localStorage.setItem("echo_vox_v1", JSON.stringify(VOX)); } catch (e) {} return { amount: VOX.amt, level: VOX.lvl }; }, get: function () { return { amount: VOX.amt, level: VOX.lvl }; } },
     critique: critique, setMelodies: setMelodies, setBass: setBass, setDrums: setDrums, setOrchestra: setOrchestra, likedExamples: likedExamples, tasteProfile: tasteProfile, tonesOf: tonesOf, parseBrief: parseBrief, moods: MOOD_LIST.slice(), styles: STYLE_LIST.map(function (k) { return { id: k, name: STYLES[k].name }; }),
     samples: { setBase: function (u) { SMP.base = u; }, memory: function () { return { mb: +(smpBytes() / 1048576).toFixed(1), budgetMB: +(smpBudget() / 1048576).toFixed(0), banks: Object.keys(SMP.banks).filter(function (k) { return SMP.banks[k].ready; }).length }; }, setBudgetMB: function (n) { SMP.budgetMB = n; }, enable: function (on) { SMP.on = !!on; }, enabled: function () { return SMP.on; }, status: function () { var o = {}; for (var k in SMP.banks) o[k] = SMP.banks[k].ready ? "ready" : SMP.banks[k].failed ? "failed" : "loading"; return o; }, preload: function (names) { var c = ensureCtx(); if (c) (names || Object.keys(SMAP).map(function (k) { return SMAP[k].bank; }).concat(["drums-acoustic", "drums-lm2"])).forEach(function (b) { smpGet(b, c); }); } },
     mix: mix, mixNext: mixNext, mixInfo: mixInfo, buildMixPlan: buildMixPlan, renderMix: renderMix,
