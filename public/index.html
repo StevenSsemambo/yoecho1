@@ -972,7 +972,7 @@ function loadEchoMusic(){
   if(_musicPromise) return _musicPromise;
   _musicPromise=new Promise((res,rej)=>{
     const el=document.createElement("script");
-    el.src="/echo-music.js?v=19"; el.async=true;
+    el.src="/echo-music.js?v=20"; el.async=true;
     el.onload=()=>{ if(window.EchoMusic){ window.dispatchEvent(new Event("echomusic-ready")); res(window.EchoMusic); } else rej(new Error("music engine missing")); };
     el.onerror=()=>rej(new Error("could not load the music engine"));
     document.head.appendChild(el);
@@ -1133,7 +1133,7 @@ async function aiJson(system,payload,ms,tokens){
     return JSON.parse(t.slice(a,z+1));
   }catch(e){ return null; }
 }
-function stripMel(plan){ const c=JSON.parse(JSON.stringify(plan)); (c.sections||[]).forEach(x=>{ if(x&&typeof x==="object"){ delete x.mel; delete x.bassline; delete x.groove; delete x.groove2; } }); return c; }
+function stripMel(plan){ const c=JSON.parse(JSON.stringify(plan)); (c.sections||[]).forEach(x=>{ if(x&&typeof x==="object"){ delete x.mel; delete x.bassline; delete x.groove; delete x.groove2; delete x.band; delete x.double; } }); delete c.mix; return c; }
 function melTargets(an){
   const out=[]; let v=false,c=false,o=false;
   (an&&an.sections||[]).forEach(s=>{ if(s.lead==="none") return;
@@ -1202,6 +1202,26 @@ function drumTargets(plan){
   return out;
 }
 function withDrums(plan,map){ const c=JSON.parse(JSON.stringify(plan)); for(const k in map){ const sx=c.sections&&c.sections[k]; if(sx&&map[k]){ sx.groove=map[k].groove||map[k]; if(map[k].groove2) sx.groove2=map[k].groove2; } } return c; }
+const ORCH_SYSTEM=`You are a master arranger and mixing engineer. A song's notes are written; you decide WHICH INSTRUMENTS play in each section and how the song is MIXED. Return ONE JSON object and nothing else: {"orchestra":{"sections":{"<sectionIndex>":{"band":{"pad":"…|none","comp":"…","lead":"…","arp":"…|none","bass":"…","ans":"…|none"},"double":{"inst":"strings","oct":12}}},"mix":{"lead":{"lvl":1.0,"rv":1.0,"dy":1.0,"pan":0},"comp":{...},"pad":{...},"arp":{...},"bass":{...},"drums":{...},"hats":{...}}}}.
+ROLES: pad = sustained bed, comp = the chord instrument (piano, guitar, keys, organ), lead = the melody instrument, arp = repeated figures, bass, ans = a second voice that answers the lead.
+INSTRUMENTS: piano, keys (electric piano), organ, hammond, guitar (acoustic), eguitar (clean electric), dguitar (distorted), lguitar (lead guitar), strings, pad, choir, flute, sax, violin, brass, horns (stabs), synth, bells, kalimba, marimba, clav, pluck; bass: ebass, upbass, sub, 808, synthbass, pluck.
+"sections": list ONLY the sections whose band differs from the song's current band (given as "band"), with only the roles that change. A role set to "none" sits out. "double": the melody is doubled by another instrument, "oct" is 12 (octave up), -12 (octave down) or 0 (same pitch, a different timbre); use it in the biggest sections.
+ARRANGE like a pro:
+- Tell a story with the instruments: a sparse intro (1-2 instruments, e.g. pad "none" and a soft comp), a fuller verse, the biggest chorus (extra pad, a double, a brighter or stronger lead), a bridge or break that sounds different (change the lead or the comp), an outro that thins out again.
+- The chorus must have clearly more layers than the verse. The lead must differ from the comp instrument. At most two sustained instruments (strings, pad, choir, violin) at once. Match the genre and mood: a ballad = piano, strings, soft guitar; funk = clav/eguitar/horns; afrobeats = guitar/kalimba/marimba/keys with a bright lead; jazz = piano, sax, upbass; cinematic = strings, choir, brass, piano; lo-fi = keys/guitar, dusty and soft; house/edm = synth, pluck, strong sub bass.
+MIX: for each part give lvl (level, 1.0 = default, range 0.4-1.7), rv (reverb amount, 1.0 = default, range 0-2.2), dy (echo amount, 0-2.2) and for pad/comp/lead/arp a pan (-0.6 left to 0.6 right). Rules of thumb: the lead sits on top (lvl 1.0-1.3) and louder than the chords; pads sit back (lvl 0.6-0.9, more reverb); bass has almost no reverb (rv 0-0.3) and is solid (lvl 1.0-1.2); drums and hats tighter and drier for dance styles (rv 0.3-0.7), roomier for ballads and rock (rv 1.0-1.5); intimate or sad pieces = warm, roomy, soft (more reverb, lower hats); energetic dance pieces = dry, punchy, bright. Pan comp and arp gently to opposite sides (about -0.25 and 0.25) for width; keep lead near the centre.
+If the message contains "critic" notes and a "previous" arrangement, rewrite it to fix exactly those problems and keep what works. Never explain.`+TASTE_NOTE;
+async function fetchOrchestra(plan,extra){
+  const payload={style:plan.style||"",bpm:plan.bpm||0,key:plan.key||"",mode:plan.mode||"",title:plan.title||"",band:plan.band||{},
+    sections:(plan.sections||[]).map((x,i)=>({index:i,kind:x&&x.kind,energy:x&&x.energy,lead:x&&x.lead,drums:x&&x.drums})),...tasteFor("orch",2),...(extra||{})};
+  const r=await aiJson(ORCH_SYSTEM,payload,12000,1800);
+  return r&&r.orchestra&&typeof r.orchestra==="object"?r.orchestra:null;
+}
+function withOrch(plan,o){
+  const c=JSON.parse(JSON.stringify(plan)); const ss=o&&o.sections||{};
+  for(const k in ss){ const sx=c.sections&&c.sections[k]; if(!sx) continue; if(ss[k].band) sx.band=ss[k].band; if(ss[k].double) sx.double=ss[k].double; }
+  if(o&&o.mix) c.mix=o.mix; return c;
+}
 // Background: the piece starts at once with the engine's own hook and bass; the written parts land from the next section on.
 async function polishMelody(plan){
   const M=window.EchoMusic; if(!M||!M.critique||!plan||typeof plan!=="object") return;
@@ -1250,7 +1270,21 @@ async function polishMelody(plan){
       M.setDrums(best); window.__lastDrumScore=res.score;
     }catch(e){}
   };
-  await Promise.all([melPass(),bassPass(),drumPass()]);
+  const orchPass=async()=>{
+    try{
+      if(!M.setOrchestra) return;
+      const base=stripMel(plan); if(plan.band) base.band=JSON.parse(JSON.stringify(plan.band)); if(plan.mix===undefined) delete base.mix;
+      let best=await fetchOrchestra(base); if(!best) return;
+      let res=M.critique(withOrch(base,best)).orch;
+      if(res.issues.length){
+        const again=await fetchOrchestra(base,{critic:res.issues,previous:best});
+        if(again){ const r2=M.critique(withOrch(base,again)).orch; if(r2.score>res.score){ best=again; res=r2; } }
+      }
+      if(res.score<50||!stillOn()) return;
+      M.setOrchestra(best); window.__lastOrchScore=res.score;
+    }catch(e){}
+  };
+  await Promise.all([melPass(),bassPass(),drumPass(),orchPass()]);
 }
 // Runs a music command. Returns a small descriptor that the chat shows as a card or a chip.
 async function runMusic(cmd,curMood){

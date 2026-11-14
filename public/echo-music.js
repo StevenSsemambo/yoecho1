@@ -516,6 +516,35 @@
     if (hits < 3 || hits > 90) return null;
     return out;
   }
+  /* orchestration: a band per section ({pad,comp,lead,arp,bass,ans} -> instrument | "none"), a melody double, and a mix sheet for the whole piece */
+  var BAND_ROLES = ["pad", "comp", "lead", "arp", "bass", "ans"];
+  function parseBandObj(b) {
+    if (!b || typeof b !== "object" || Array.isArray(b)) return null;
+    var out = {}, any = false;
+    BAND_ROLES.forEach(function (r) {
+      if (!(r in b)) return; var v = b[r];
+      if (v === null || v === false || v === "none") { out[r] = "none"; any = true; return; }
+      var nm = normInstr(v); if (INSTR_META[nm] || (r === "bass" && (BASS_LOW[nm] || INSTR_META[nm]))) { out[r] = nm; any = true; }
+    });
+    return any ? out : null;
+  }
+  function parseDouble(d) {
+    if (!d || typeof d !== "object") return null; var nm = normInstr(d.inst || d.i); if (!INSTR_META[nm]) return null;
+    var o = Number(d.oct !== undefined ? d.oct : d.o); o = o >= 6 ? 12 : o <= -6 ? -12 : 0; return { i: nm, o: o };
+  }
+  var MIX_ROLES = { drums: 1, hats: 1, bass: 1, pad: 1, comp: 1, lead: 1, arp: 1 };
+  function parseMixSheet(m) {
+    if (!m || typeof m !== "object") return null; var out = {}, any = false;
+    for (var r in m) {
+      if (!MIX_ROLES[r] || !m[r] || typeof m[r] !== "object") continue; var x = m[r], o = {};
+      if (isFinite(Number(x.lvl))) o.lvl = clamp(Number(x.lvl), .4, 1.7);
+      if (isFinite(Number(x.rv))) o.rv = clamp(Number(x.rv), 0, 2.2);
+      if (isFinite(Number(x.dy))) o.dy = clamp(Number(x.dy), 0, 2.2);
+      if (isFinite(Number(x.pan)) && (r === "pad" || r === "comp" || r === "lead" || r === "arp")) o.pan = clamp(Number(x.pan), -.6, .6);
+      if (Object.keys(o).length) { out[r] = o; any = true; }
+    }
+    return any ? out : null;
+  }
   function parsePlan(p) {
     if (typeof p === "string") { var t = p.replace(/```(?:json)?/gi, ""), a = t.indexOf("{"), z = t.lastIndexOf("}"); try { p = JSON.parse(t.slice(a, z + 1)); } catch (e) { return null; } }
     if (!p || typeof p !== "object" || !Array.isArray(p.sections)) return null;
@@ -533,7 +562,7 @@
       var lead = String(rs.lead || "theme").toLowerCase(); if (!PLAN_LEAD[lead]) lead = "theme";
       var bars = clamp(Math.round(Number(rs.bars) || chords.length), 4, 24), dr = Number(rs.drums); if (!isFinite(dr)) dr = 2;
       var pm = parseMel(rs.mel, bars), pbs = parseBassLine(rs.bassline, bars), pg = parseGroove(rs.groove), pg2 = pg ? parseGroove(rs.groove2) : null;
-      out.sections.push({ src: i, mel: pm ? pm.byBar : null, melBars: pm ? pm.bars : 0, bl: pbs ? pbs.byBar : null, blBars: pbs ? pbs.bars : 0, gv: pg ? { a: pg, b: pg2 } : null, kind: kind, chords: chords, bars: bars, energy: clamp(typeof rs.energy === "number" ? rs.energy : .6, .1, 1), lead: lead, drums: clamp(Math.round(dr), 0, 2),
+      out.sections.push({ src: i, mel: pm ? pm.byBar : null, melBars: pm ? pm.bars : 0, bl: pbs ? pbs.byBar : null, blBars: pbs ? pbs.bars : 0, gv: pg ? { a: pg, b: pg2 } : null, band: parseBandObj(rs.band), dbl: parseDouble(rs.double), kind: kind, chords: chords, bars: bars, energy: clamp(typeof rs.energy === "number" ? rs.energy : .6, .1, 1), lead: lead, drums: clamp(Math.round(dr), 0, 2),
         bass: rs.bass !== false, arp: rs.arp === true, comp: rs.comp !== false, fill: rs.fill !== false && kind !== "intro", crash: kind === "chorus" || kind === "drop" || kind === "solo" || rs.crash === true });
     }
     if (out.sections.length < 2) return null;
@@ -552,6 +581,7 @@
         var nm = normInstr(v); if (INSTR_META[nm] || (r === "bass" && (BASS_LOW[nm] || INSTR_META[nm]))) out.band[r] = nm;
       });
     }
+    out.mix = parseMixSheet(p.mix);
     var mo = p.motif;
     if (mo && Array.isArray(mo.on) && Array.isArray(mo.deg) && mo.on.length === mo.deg.length && mo.on.length >= 2 && mo.on.length <= 10) {
       var on = mo.on.map(function (x) { return clamp(Math.round(Number(x)), 0, 15); }), deg = mo.deg.map(function (x) { return clamp(Math.round(Number(x)), -3, 10); }), ok = true;
@@ -569,7 +599,7 @@
     var pl = parsePlan(src); if (!pl) return { ok: false, score: 0, issues: ["The plan could not be read."], stats: {} };
     var sc = MODES[pl.mode] || MODES.ionian, n = sc.length, issues = [], pen = 0, stats = { sections: pl.sections.length, melodies: 0 };
     function semi(d) { var o = Math.floor(d / n); return sc[d - o * n] + 12 * o; }
-    var cur = "plan", parts = { plan: { pen: 0, issues: [] }, mel: { pen: 0, issues: [] }, bass: { pen: 0, issues: [] }, drums: { pen: 0, issues: [] } };
+    var cur = "plan", parts = { orch: { pen: 0, issues: [] }, plan: { pen: 0, issues: [] }, mel: { pen: 0, issues: [] }, bass: { pen: 0, issues: [] }, drums: { pen: 0, issues: [] } };
     function note(msg, w) { issues.push(msg); pen += w; parts[cur].pen += w; parts[cur].issues.push(msg); }
     var sections = pl.sections, avgPitch = {}, i, j;
     var chorusCount = 0, hasContrast = false, uniq = {};
@@ -647,11 +677,39 @@
       });
       if (sx.gv.b && sx.gv.b === sx.gv.a) note(tag + "the second bar is identical to the first.", 1);
     });
+    cur = "orch";
+    (function () {
+      var base = pl.band || {}, famOf = function (nm) { return nm && INSTR_META[nm] ? INSTR_META[nm].fam : ""; };
+      function eff(sx) { var b = {}, r; BAND_ROLES.forEach(function (k) { b[k] = base[k]; if (sx.band && sx.band[k] !== undefined) b[k] = sx.band[k]; }); return b; }
+      function layers(sx) { var b = eff(sx), n = 0; ["pad", "comp", "lead", "arp", "ans"].forEach(function (k) { if (b[k] !== "none" && !(k === "lead" && sx.lead === "none")) n++; }); if (sx.dbl) n++; if (sx.bass !== false && b.bass !== "none") n++; return n; }
+      var changed = 0, firstIntro = null, i2;
+      sections.forEach(function (sx) { if (sx.band || sx.dbl) changed++; if (!firstIntro && sx.kind === "intro") firstIntro = sx; });
+      stats.orchestrated = changed;
+      if (sections.length >= 5 && !changed && !pl.mix) note("The arrangement never changes: give some sections their own instruments (e.g. strings join the chorus, a different lead in the bridge) and add a mix sheet.", 6);
+      if (firstChorus && firstVerse && layers(firstChorus) <= layers(firstVerse) && !firstChorus.dbl) note("The chorus is not fuller than the verse: bring in an extra instrument or a melody double for the chorus.", 8);
+      if (firstIntro && firstChorus && layers(firstIntro) >= layers(firstChorus)) note("The intro is as full as the chorus: strip the intro back to one or two instruments.", 6);
+      sections.forEach(function (sx) {
+        var b = eff(sx), tag = "Section " + sx.src + " (" + sx.kind + "): ";
+        if (b.lead && b.comp && b.lead === b.comp && b.lead !== "none" && sx.lead !== "none") note(tag + "the lead and the chords are the same instrument (" + b.lead + "); give the melody a different timbre so it stands out.", 6);
+        var sus = 0; ["pad", "comp", "lead", "arp", "ans"].forEach(function (k) { var f = famOf(b[k]); if (f === "sus" || f === "bowed") sus++; }); if (sx.dbl && /sus|bowed/.test(famOf(sx.dbl.i))) sus++;
+        if (sus > 2) note(tag + "too many sustained instruments at once (" + sus + "); it will sound muddy. Keep at most two of strings, pad, choir and violin.", 6);
+        if (sx.dbl && sx.dbl.o === 0 && (sx.dbl.i === b.lead)) note(tag + "the melody double is the same instrument at the same pitch; use another instrument or an octave.", 5);
+        if (sx.dbl && sx.lead === "none") note(tag + "a melody double needs a lead melody to double.", 3);
+        if (sx.kind === "bridge" && !sx.band && !sx.dbl && changed && sections.length >= 6) note(tag + "the bridge should sound different: change the lead or the chords' instrument for it.", 3);
+      });
+      var m = pl.mix; if (m) {
+        if (m.lead && m.comp && m.lead.lvl !== undefined && m.comp.lvl !== undefined && m.lead.lvl < m.comp.lvl * .8) note("Mix: the lead is quieter than the chords; the melody will be buried.", 8);
+        if (m.pad && m.pad.lvl > 1.4) note("Mix: the pad is too loud; it will swamp everything.", 5);
+        ["pad", "comp", "lead", "arp", "bass", "drums"].forEach(function (r) { if (m[r] && m[r].rv > 1.8) note("Mix: too much reverb on the " + r + "; it will wash out.", 4); });
+        if (m.bass && m.bass.rv > .6) note("Mix: reverb on the bass makes it muddy; keep it near zero.", 6);
+        if (m.drums && m.bass && m.bass.lvl > 1.5 && m.drums.lvl < .8) note("Mix: the bass is far louder than the drums.", 4);
+      } else if (changed) note("There is no mix sheet: set level, reverb and delay for each part to suit the song.", 3);
+    })();
     cur = "mel"; var ci = sections.indexOf(firstChorus), vi = sections.indexOf(firstVerse);
     if (ci >= 0 && vi >= 0 && avgPitch[ci] !== undefined && avgPitch[vi] !== undefined && avgPitch[ci] < avgPitch[vi] + 1) note("The chorus melody should sit higher than the verse melody so it lifts.", 6);
     var score = Math.max(0, Math.min(100, 100 - pen));
     var fin = function (k) { return { score: Math.max(0, 100 - parts[k].pen), issues: parts[k].issues.slice(0, 8) }; };
-    return { ok: true, score: score, issues: issues.slice(0, 8), stats: stats, mel: fin("mel"), bass: fin("bass"), drums: fin("drums"), plan: fin("plan") };
+    return { ok: true, score: score, issues: issues.slice(0, 8), stats: stats, mel: fin("mel"), bass: fin("bass"), drums: fin("drums"), orch: fin("orch"), plan: fin("plan") };
   }
   /* what a melody writer needs to see: for every chord, which scale degrees are its notes (safe on the beat) */
   function tonesOf(src) {
@@ -674,6 +732,20 @@
     var sg = function (x) { return x.kind + "|" + x.chords.map(function (c) { return c.rs + c.q; }).join(); }, sn = {};
     plan.sections.forEach(function (x) { if (x[field] && !sn[sg(x)]) sn[sg(x)] = x; });
     plan.sections.forEach(function (x) { if (!x[field] && sn[sg(x)] && (field === "bl" ? x.bass : x.lead !== "none")) { x[field] = sn[sg(x)][field]; x[bfield] = sn[sg(x)][bfield]; } });
+    return done;
+  }
+  /* live orchestration: per-section bands and doubles, plus the mix sheet; sections take their band at their next start, the mix eases in at the next bar */
+  function setOrchestra(o) {
+    var pc = P.piece; if (!pc || !pc.comp || !pc.comp.spec || !pc.comp.spec.plan || !o) return 0;
+    var plan = pc.comp.spec.plan, raw = P.lastBrief && (P.lastBrief.planSrc || P.lastBrief.plan), done = 0, secs = o.sections || {};
+    plan.sections.forEach(function (ps) {
+      var m = secs[ps.src]; if (!m || typeof m !== "object") return;
+      var b = parseBandObj(m.band), d = parseDouble(m.double); if (!b && !d) return;
+      ps.band = b; ps.dbl = d; done++;
+      if (raw && typeof raw === "object" && Array.isArray(raw.sections) && raw.sections[ps.src]) { var rs = raw.sections[ps.src]; if (b) rs.band = m.band; else delete rs.band; if (d) rs.double = m.double; else delete rs.double; }
+    });
+    var mx = parseMixSheet(o.mix); if (mx) { plan.mix = mx; done++; if (raw && typeof raw === "object") raw.mix = o.mix; }
+    if (done) resaveIfLiked();
     return done;
   }
   function setBass(map) { var n = setPart(map, "bl", "blBars", parseBassLine); if (n) resaveIfLiked(); return n; }
@@ -1008,6 +1080,7 @@
         var ev = { s: nt.s, r: "lead", i: S.pal.lead, m: nm, d: d, v: v0 * accent * contour * (1 + (rng() - .5) * .1), p: 1 };
         if (glidy && prevM !== null && prevM !== nm && Math.abs(prevM - nm) <= 3 && nt.len >= 2 && rng.chance(.25)) ev.gl = prevM - nm;
         out.push(ev); prevM = nm;
+        if (sec.dbl && S.pal.lead) out.push({ s: nt.s, r: "lead", i: sec.dbl.i, m: nm + sec.dbl.o, d: d, v: ev.v * (sec.dbl.o ? .55 : .5), p: 2, ans: 0 });
       }
       return out;
     }
@@ -1377,6 +1450,12 @@
         spec.stages[S.stage].style = st.style; enterStage(S.stage, false); S.arcIdx = 1;
       }
     }
+    /* a section's own band: swap instruments in for this section and put the base band back at the next one (unless a live steer changed that part meanwhile) */
+    function applySectionBand(ps) {
+      var r, o = S.palOver || {}; for (r in o) if (S.pal[r] === o[r].to) S.pal[r] = o[r].was; S.palOver = {};
+      if (!ps || !ps.band) return;
+      for (r in ps.band) { var to = ps.band[r] === "none" ? null : ps.band[r]; if (S.pal[r] === to) continue; S.palOver[r] = { was: S.pal[r], to: to }; S.pal[r] = to; }
+    }
     function startSection() {
       applySteer();
       if (S.stage < spec.stages.length - 1 && S.barNo - S.stageStart >= spec.stages[S.stage].bars) enterStage(S.stage + 1, true);
@@ -1400,6 +1479,8 @@
         layers: { comp: S.style.solo ? true : tpl.k === "intro" ? rng.chance(.55) : tpl.k === "break" ? rng.chance(.8) : true, bass: !!tpl.bass && e >= .15, drums: dl, arp: rng.chance(tpl.arp * (.5 + e * .7)) },
         compVar: rng.int(4), bassVar: rng.int(6), drumVar: rng.int(4), loop: 0, ans: false
       };
+      applySectionBand(ps);
+      S.sec.dbl = ps && ps.dbl ? ps.dbl : null;
       if (ps && ps.mel) { S.sec.mel = ps.mel; S.sec.melBars = ps.melBars; }
       if (ps && ps.bl) { S.sec.bl = ps.bl; S.sec.blBars = ps.blBars; }
       if (ps && ps.gv) S.sec.gv = ps.gv;
@@ -1461,7 +1542,7 @@
         idx: S.barNo, bpm: bpmB, stepDur: 60 / bpmB / 4, barDur: 60 / bpmB * 4, swing: S.style.swing, swing8: S.style.swing8 || 0, human: human, events: ev,
         lay: S.style.lay || 0,
         mix: { wobble: S.style.wobble || 0, cut: cut, wet: wet, duck: S.style.duck, delay: S.style.delay, tex: S.tex, grit: S.recipe.grit, bright: S.recipe.bright, space: S.recipe.space, level: S.style.level || 1 },
-        kit: S.style.kit, sec: { kind: sec.kind, idx: S.secNo, bar: S.secBar, len: sec.bars, e: sec.e }, secStart: first, stage: S.stage, mood: spec.stages[S.stage].mood, style: S.styleName,
+        strips: PLAN && PLAN.mix || null, kit: S.style.kit, sec: { kind: sec.kind, idx: S.secNo, bar: S.secBar, len: sec.bars, e: sec.e }, secStart: first, stage: S.stage, mood: spec.stages[S.stage].mood, style: S.styleName,
         key: { root: S.root, mode: S.mode }, palette: S.pal
       };
       S.secBar++; S.barNo++;
@@ -1713,7 +1794,7 @@
       last.connect(lvl); lvl.connect(premix);
       rv.gain.value = c.rv; dy.gain.value = c.dy;
       lvl.connect(rv); rv.connect(rvIn); lvl.connect(dy); dy.connect(dIn);
-      E.strips[name] = { in: inn, lvl: lvl, rv: rv, dy: dy, cfg: c };
+      E.strips[name] = { in: inn, lvl: lvl, rv: rv, dy: dy, cfg: c, pan: undefined };
     });
     function kickDuck(t) {
       if (E.duckDepth <= 0) return;
@@ -2163,12 +2244,20 @@
       voices.push(t + dur); if (cost > 1) for (k = 1; k < cost; k++) voices.push(t + dur); return true;
     };
 
+    /* the song's mix sheet: level, reverb, delay and stereo position per part, eased in so nothing clicks */
+    E.setStrips = function (m, t) {
+      for (var r in m) { var st = E.strips[r], x = m[r]; if (!st) continue;
+        if (x.lvl !== undefined) st.lvl.gain.setTargetAtTime(st.cfg.lvl * x.lvl, t, .4);
+        if (x.rv !== undefined) st.rv.gain.setTargetAtTime(st.cfg.rv * x.rv, t, .4);
+        if (x.dy !== undefined) st.dy.gain.setTargetAtTime(st.cfg.dy * x.dy, t, .4);
+        if (x.pan !== undefined) st.pan = x.pan; }
+    };
     E.note = function (ev, t, bar) {
       var name = ev.i, fn = INST[name]; if (!fn) return;
       var sec = ev.d * bar.stepDur, o = ev.r === "bass" ? E.bassOut() : E.strips[ROLE_STRIP[ev.r]].in;
       var sp = SMAP[name], smp = sp && E.samples && SMP.on && SMP.banks[sp.bank] && SMP.banks[sp.bank].ready;
       if (!E.admit(ev, t, smp ? sp.cost : (COST[name] || 2), sec + .3)) return;
-      var pv = ev.pan !== undefined ? ev.pan : (E.lite ? 0 : ev.r === "pad" ? ((ev.m % 5) - 2) * .15 : ev.r === "comp" ? ((ev.m % 3) - 1) * .16 : (ev.r === "lead" && ev.ans) ? -.28 : 0);
+      var rp = E.strips[ROLE_STRIP[ev.r]], pv = ev.pan !== undefined ? ev.pan : (rp && rp.pan !== undefined && !ev.ans ? rp.pan : E.lite ? 0 : ev.r === "pad" ? ((ev.m % 5) - 2) * .15 : ev.r === "comp" ? ((ev.m % 3) - 1) * .16 : (ev.r === "lead" && ev.ans) ? -.28 : 0);
       if (pv && ctx.createStereoPanner) { var pn = ctx.createStereoPanner(); pn.pan.value = clamp(pv, -1, 1); pn.connect(o); o = pn; }
       E.curGl = ev.gl || 0; E.curDet = (Math.random() - .5) * 6;
       try {
@@ -2184,6 +2273,7 @@
     /* where each part sits against the grid (seconds, scaled by the style's "lay-back"): kick pushes, snare and lead lean back */
     var LAY = { kick: -.004, snare: .012, clap: .012, hat: .002, open: .002, bass: .006, lead: .014, comp: .008, arp: .004 }, drift = 0;
     E.playBar = function (bar, t0) {
+      if (bar.strips) E.setStrips(bar.strips, t0);
       E.setMix(bar.mix, t0, bar); if (bar.palette) E.warm(bar.palette); if (DRUMBANK[bar.kit] && E.samples && SMP.on) smpGet(DRUMBANK[bar.kit], ctx);
       drift = drift * .7 + (Math.random() - .5) * .008 * (bar.human || 0);
       for (var k = 0; k < bar.events.length; k++) {
@@ -2415,7 +2505,8 @@
     var res = [], L = likedPlans().slice(0, clamp(n || 2, 1, 4));
     L.forEach(function (x) {
       var r = x.raw, ex = { title: x.t, style: r.style || "", key: r.key || "", mode: r.mode || "", bpm: r.bpm || 0 };
-      if (!part || part === "plan") { ex.band = r.band || {}; ex.motif = r.motif || null; }
+      if (!part || part === "plan" || part === "orch") { ex.band = r.band || {}; if (part !== "orch") ex.motif = r.motif || null; }
+      if (part === "orch" && r.mix) ex.mix = r.mix;
       var secs = [], seenK = {};
       (r.sections || []).forEach(function (sx) {
         if (!sx || !Array.isArray(sx.chords) || seenK[sx.kind] || secs.length >= 2) return;
@@ -2425,7 +2516,9 @@
         if (part === "bass" || !part) { if (Array.isArray(sx.bassline) && sx.bassline.length) o.bassline = sx.bassline.filter(function (n) { return n[0] < 1; }).slice(0, 12); }
         if (part === "drums" || !part) { if (sx.groove) o.groove = sx.groove; }
         if (part === "plan" || !part) { o.energy = sx.energy; o.bars = sx.bars; }
-        if (part && part !== "plan" && !(o.mel || o.bassline || o.groove)) return;
+        if (part === "orch") { if (sx.band) o.band = sx.band; if (sx.double) o.double = sx.double; }
+        if (part && part !== "plan" && part !== "orch" && !(o.mel || o.bassline || o.groove)) return;
+        if (part === "orch" && !(o.band || o.double)) return;
         seenK[sx.kind] = 1; secs.push(o);
       });
       if (secs.length) { ex.sections = secs; res.push(ex); }
@@ -2600,7 +2693,7 @@
     current: function () { var pc = P.piece; if (!pc || !P.lastBrief) return null; var b = {}; for (var k in P.lastBrief) b[k] = P.lastBrief[k]; b.seed = pc.seed; return b; },
     like: like, saved: saved, playSaved: playSaved, tasteSummary: tasteSummary, info: info, level: level,
     on: function (fn) { P.listeners.push(fn); return function () { API.off(fn); }; }, off: function (fn) { P.listeners = P.listeners.filter(function (x) { return x !== fn; }); },
-    critique: critique, setMelodies: setMelodies, setBass: setBass, setDrums: setDrums, likedExamples: likedExamples, tasteProfile: tasteProfile, tonesOf: tonesOf, parseBrief: parseBrief, moods: MOOD_LIST.slice(), styles: STYLE_LIST.map(function (k) { return { id: k, name: STYLES[k].name }; }),
+    critique: critique, setMelodies: setMelodies, setBass: setBass, setDrums: setDrums, setOrchestra: setOrchestra, likedExamples: likedExamples, tasteProfile: tasteProfile, tonesOf: tonesOf, parseBrief: parseBrief, moods: MOOD_LIST.slice(), styles: STYLE_LIST.map(function (k) { return { id: k, name: STYLES[k].name }; }),
     samples: { setBase: function (u) { SMP.base = u; }, memory: function () { return { mb: +(smpBytes() / 1048576).toFixed(1), budgetMB: +(smpBudget() / 1048576).toFixed(0), banks: Object.keys(SMP.banks).filter(function (k) { return SMP.banks[k].ready; }).length }; }, setBudgetMB: function (n) { SMP.budgetMB = n; }, enable: function (on) { SMP.on = !!on; }, enabled: function () { return SMP.on; }, status: function () { var o = {}; for (var k in SMP.banks) o[k] = SMP.banks[k].ready ? "ready" : SMP.banks[k].failed ? "failed" : "loading"; return o; }, preload: function (names) { var c = ensureCtx(); if (c) (names || Object.keys(SMAP).map(function (k) { return SMAP[k].bank; }).concat(["drums-acoustic", "drums-lm2"])).forEach(function (b) { smpGet(b, c); }); } },
     mix: mix, mixNext: mixNext, mixInfo: mixInfo, buildMixPlan: buildMixPlan, renderMix: renderMix,
     render: render, toWav: toWav, exportWav: exportWav, exportMixWav: exportMixWav,
