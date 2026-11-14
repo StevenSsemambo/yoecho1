@@ -1128,7 +1128,7 @@ async function aiJson(system,payload,ms,tokens){
     const ctl=new AbortController(), to=setTimeout(()=>ctl.abort(),ms||12000);
     const res=await fetch("/.netlify/functions/chat",{method:"POST",headers:{"Content-Type":"application/json"},signal:ctl.signal,
       body:JSON.stringify({system,maxTokens:tokens||2000,messages:[{role:"user",content:JSON.stringify(payload)}]})});
-    clearTimeout(to); if(!res.ok) return null;
+    clearTimeout(to); if(!res.ok){ if(res.status===429||res.status===503) window.__aiCool=Date.now()+180000; return null; }
     const d=await res.json(), t=String(d.text||""), a=t.indexOf("{"), z=t.lastIndexOf("}"); if(a<0||z<a) return null;
     return JSON.parse(t.slice(a,z+1));
   }catch(e){ return null; }
@@ -1226,6 +1226,11 @@ function withOrch(plan,o){
 // Background: the piece starts at once with the engine's own hook and bass; the written parts land from the next section on.
 async function polishMelody(plan){
   const M=window.EchoMusic; if(!M||!M.critique||!plan||typeof plan!=="object") return;
+  /* quota care: the extra writers are optional, so they stand down while the AI is rate limited, and the listener can choose how many to run
+     (console: localStorage.setItem('yoecho_composer','0'|'1'|'2'): 0 = chord plan only, 1 = melody + bass, 2 = everything) */
+  if(Date.now()<(window.__aiCool||0)) return;
+  let level=2; try{ const v=localStorage.getItem('yoecho_composer'); if(v==='0'||v==='1'||v==='2') level=Number(v); }catch(e){}
+  if(level===0) return;
   const stillOn=()=>{ const cur=M.current&&M.current(); return !!cur&&(cur.planSrc===plan||cur.plan===plan); };
   const melPass=async()=>{
     try{
@@ -1234,7 +1239,7 @@ async function polishMelody(plan){
       const targets=melTargets(an); if(!targets.length) return;
       let best=await fetchMelodies(an,targets); if(!best) return;
       let res=M.critique(withMel(base,best)).mel;
-      if(res.score<80&&res.issues.length){
+      if(level>=2&&res.score<80&&res.issues.length){
         const again=await fetchMelodies(an,targets,{critic:res.issues,previous:best});
         if(again){ const r2=M.critique(withMel(base,again)).mel; if(r2.score>res.score){ best=again; res=r2; } }
       }
@@ -1249,7 +1254,7 @@ async function polishMelody(plan){
       const targets=bassTargets(base); if(!targets.length) return;
       let best=await fetchBass(base,targets); if(!best) return;
       let res=M.critique(withBass(base,best)).bass;
-      if(res.issues.length){
+      if(level>=2&&res.issues.length){
         const again=await fetchBass(base,targets,{critic:res.issues,previous:best});
         if(again){ const r2=M.critique(withBass(base,again)).bass; if(r2.score>res.score){ best=again; res=r2; } }
       }
@@ -1285,7 +1290,7 @@ async function polishMelody(plan){
       M.setOrchestra(best); window.__lastOrchScore=res.score;
     }catch(e){}
   };
-  await Promise.all([melPass(),bassPass(),drumPass(),orchPass()]);
+  await Promise.all(level>=2?[melPass(),bassPass(),drumPass(),orchPass()]:[melPass(),bassPass()]);
 }
 // Runs a music command. Returns a small descriptor that the chat shows as a card or a chip.
 async function runMusic(cmd,curMood){

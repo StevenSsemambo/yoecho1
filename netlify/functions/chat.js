@@ -17,6 +17,13 @@
 // Netlify env vars:
 //   GEMINI_API_KEY     (required)  https://aistudio.google.com/apikey
 //   GROQ_API_KEY       (required)  https://console.groq.com/keys
+//   MORE KEYS (optional, to spread usage and avoid rate limits). Any of these work, mix freely:
+//     GEMINI_API_KEYS = key1,key2,key3,key4      (comma or newline separated)
+//     GEMINI_API_KEY_2, GEMINI_API_KEY_3 ... GEMINI_API_KEY_12
+//     GROQ_API_KEYS   = key1,key2,key3,key4
+//     GROQ_API_KEY_2, GROQ_API_KEY_3 ... GROQ_API_KEY_12
+//   A key that hits a rate limit rests for a while and the next key is used.
+//   NOTE: limits are per Google project / Groq organisation, so keys must come from different ones to help.
 //   GEMINI_MODEL       (optional)  comma-separated list, overrides defaults
 //   GROQ_MODEL         (optional)  comma-separated list, overrides defaults
 //   GEMINI_TIMEOUT_MS  (optional)  per-attempt, default 6000
@@ -67,6 +74,41 @@ class ProviderError extends Error {
   }
 }
 
+// ── key pools ────────────────────────────────────────────────────────────────
+// Every key found in the environment, de-duplicated. A key that is rate limited rests for a while
+// (module-level state: it lives as long as the warm function instance); a key that is rejected rests longer.
+function collectKeys(prefix) {
+  const out = [];
+  const add = (v) => String(v || "").split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean).forEach((k) => { if (!out.includes(k)) out.push(k); });
+  add(process.env[`${prefix}_API_KEYS`]);
+  add(process.env[`${prefix}_API_KEY`]);
+  for (let i = 2; i <= 12; i++) add(process.env[`${prefix}_API_KEY_${i}`]);
+  return out;
+}
+const POOLS = { gemini: collectKeys("GEMINI"), groq: collectKeys("GROQ") };
+const restUntil = {};   // `${provider}:${index}` -> timestamp
+const RATE_REST_MS = Number(process.env.KEY_RATE_REST_MS) || 60000;
+const BAD_REST_MS = 10 * 60000;
+let rr = 0;
+// Free quotas are per key AND per model, so a key rests per model (a bad key rests for every model).
+const restKeyName = (provider, idx, model) => `${provider}:${idx}:${model}`;
+// keys to try for this model: ready keys in rotating order; if every key is resting, only the one that recovers first
+function keyOrder(provider, model) {
+  const n = POOLS[provider].length; if (!n) return [];
+  const now = Date.now(), ready = [], resting = [];
+  for (let i = 0; i < n; i++) {
+    const idx = (rr + i) % n, until = Math.max(restUntil[restKeyName(provider, idx, model)] || 0, restUntil[`${provider}:${idx}:*`] || 0);
+    (until <= now ? ready : resting).push({ idx, until });
+  }
+  if (ready.length) return ready.map((x) => x.idx);
+  resting.sort((a, b) => a.until - b.until);
+  return [resting[0].idx];
+}
+function restKey(provider, idx, model, status, retryAfterSec) {
+  if (status === 429) restUntil[restKeyName(provider, idx, model)] = Date.now() + Math.min(10 * 60000, Math.max(RATE_REST_MS, (Number(retryAfterSec) || 0) * 1000));
+  else restUntil[`${provider}:${idx}:*`] = Date.now() + BAD_REST_MS;
+}
+
 // Model-level problems: try the next model in the same provider.
 const isModelProblem = (s) => s === 404 || s === 400;
 
@@ -100,8 +142,7 @@ function toGeminiContents(messages) {
   return out;
 }
 
-async function callGemini(model, messages, system, capMs) {
-  const key = process.env.GEMINI_API_KEY;
+async function callGemini(model, messages, system, capMs, key) {
   if (!key) throw new ProviderError("GEMINI_API_KEY not set", 401);
 
   const body = {
@@ -122,7 +163,9 @@ async function callGemini(model, messages, system, capMs) {
 
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
-    throw new ProviderError(e?.error?.message || "request failed", res.status);
+    const pe = new ProviderError(e?.error?.message || "request failed", res.status);
+    pe.retryAfter = res.headers && res.headers.get ? res.headers.get("retry-after") : null;
+    throw pe;
   }
 
   const data = await res.json();
@@ -138,8 +181,7 @@ async function callGemini(model, messages, system, capMs) {
   return text;
 }
 
-async function callGroq(model, messages, system, capMs) {
-  const key = process.env.GROQ_API_KEY;
+async function callGroq(model, messages, system, capMs, key) {
   if (!key) throw new ProviderError("GROQ_API_KEY not set", 401);
 
   const msgs = [];
@@ -165,7 +207,9 @@ async function callGroq(model, messages, system, capMs) {
 
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
-    throw new ProviderError(e?.error?.message || "request failed", res.status);
+    const pe = new ProviderError(e?.error?.message || "request failed", res.status);
+    pe.retryAfter = res.headers && res.headers.get ? res.headers.get("retry-after") : null;
+    throw pe;
   }
 
   const data = await res.json();
@@ -176,25 +220,42 @@ async function callGroq(model, messages, system, capMs) {
   return text;
 }
 
-// Try each model of one provider. Returns { text, model } or throws the last error.
+// Try each model of one provider, and for each model each available key.
+//   • rate limit (429)      → that key rests, try the next key
+//   • bad key (401/403)     → that key rests longer, try the next key
+//   • model retired (404/400) → next model
+//   • anything else (timeout, 5xx, empty) → leave this provider
 async function runProvider(name, models, fn, messages, system, started, details, statuses) {
+  const provider = name.toLowerCase();
+  if (!POOLS[provider].length) { details.push(`${name}: no API key set`); statuses.push(401); return null; }
   for (const model of models) {
-    if (Date.now() - started > TOTAL_BUDGET_MS) {
-      details.push(`${name}: out of time budget, skipped remaining models`);
-      statuses.push(504);
-      return null;
+    let modelRetired = false;
+    rr = (rr + 1) % Math.max(1, POOLS[provider].length);
+    const order = keyOrder(provider, model);
+    for (const idx of order) {
+      if (Date.now() - started > TOTAL_BUDGET_MS) {
+        details.push(`${name}: out of time budget, skipped remaining attempts`);
+        statuses.push(504);
+        return null;
+      }
+      try {
+        const capMs = Math.max(1500, TOTAL_BUDGET_MS - (Date.now() - started) + 500);
+        const text = await fn(model, messages, system, capMs, POOLS[provider][idx]);
+        return { text, model };
+      } catch (err) {
+        const line = `${name} ${model} key#${idx + 1} HTTP ${err.status}: ${String(err.message).slice(0, 160)}`;
+        details.push(line);
+        statuses.push(err.status);
+        console.warn("[YoEcho]", line);
+        if (err.status === 429 || err.status === 401 || err.status === 403) { restKey(provider, idx, model, err.status, err.retryAfter); continue; }
+        if (isModelProblem(err.status)) { modelRetired = true; break; }
+        return null;
+      }
     }
-    try {
-      const capMs = Math.max(1500, TOTAL_BUDGET_MS - (Date.now() - started) + 500);
-      const text = await fn(model, messages, system, capMs);
-      return { text, model };
-    } catch (err) {
-      const line = `${name} ${model} HTTP ${err.status}: ${String(err.message).slice(0, 160)}`;
-      details.push(line);
-      statuses.push(err.status);
-      console.warn("[YoEcho]", line);
-      if (isModelProblem(err.status)) continue; // retired/unknown model → next model
-      return null; // rate limit, key, timeout, 5xx → leave this provider
+    if (!modelRetired) {
+      // every key was limited or rejected for this model; another model has its own quota on some providers
+      if (statuses[statuses.length - 1] === 429) continue;
+      return null;
     }
   }
   return null;
