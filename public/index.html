@@ -972,7 +972,7 @@ function loadEchoMusic(){
   if(_musicPromise) return _musicPromise;
   _musicPromise=new Promise((res,rej)=>{
     const el=document.createElement("script");
-    el.src="/echo-music.js?v=24"; el.async=true;
+    el.src="/echo-music.js?v=25"; el.async=true;
     el.onload=()=>{ if(window.EchoMusic){ window.dispatchEvent(new Event("echomusic-ready")); res(window.EchoMusic); } else rej(new Error("music engine missing")); };
     el.onerror=()=>rej(new Error("could not load the music engine"));
     document.head.appendChild(el);
@@ -1029,6 +1029,8 @@ function sniffMusic(text,active){
     const sty=t.match(/\b(?:make it|switch to|change to|try|more|some|go|turn it into|play it as)\s+(?:more\s+|a\s+)?(.{0,22})/);
     if(sty){ const g=genreIn(sty[1]); if(g) return {cmd:"steer",style:g}; }
     if(/\b(like|love|save)\b[^.!?]{0,12}\b(this|it|that)\b/.test(t)&&/\b(song|music|one|piece|track|it)\b/.test(t)) return {cmd:"like"};
+    if(/\b(don'?t|do not|didn'?t|not)\b[^.!?]{0,8}\b(like|love|enjoy|a fan of|for me)\b[^.!?]{0,14}\b(this|it|that)\b|\bthumbs? down\b|\bnot for me\b|\b(this|that|it) (is |sounds )?(boring|awful|bad|terrible|annoying)\b/.test(t)) return {cmd:"dislike"};
+    if(/\b(download|save|export)\b[^.!?]{0,20}\b(this|it|that|the)\b[^.!?]{0,14}\b(song|music|piece|track|wav|audio|file)\b|\bdownload (this|it|the song|the music)\b/.test(t)) return {cmd:"download"};
     // musical rewrites the simple controls cannot do: "make the chorus bigger", "darker key", "add a guitar solo", "change the chords"
     if(/\b(make|add|give|turn|change|switch|put|can you|could you|let'?s|i want|i'd like|i would like|try|how about)\b/.test(t)&&/\b(chorus|verse|bridge|solo|intro|outro|ending|key|chords?|melody|hook|riff|bass ?line|groove|build ?up|drop|darker|brighter|happier|sadder|heavier|softer|bigger|fuller|simpler|busier|dramatic|epic|sparser|catchier|different)\b/.test(t)&&!/\b(volume|louder|quieter|stop|pause)\b/.test(t)) return {cmd:"revise",ask:String(text||"").slice(0,300)};
   }
@@ -1159,7 +1161,7 @@ If the message contains "critic" notes and a "previous" line, rewrite it to fix 
 async function fetchBass(plan,targets,extra){
   const payload={style:plan.style||"",bpm:plan.bpm||0,bass:(plan.band&&plan.band.bass)||"",sections:targets.map(t=>({index:t.index,kind:t.kind,energy:t.energy,chords:t.chords}))};
   Object.assign(payload,exFor("bass"),tasteFor("bass",2),extra||{});
-  const r=await aiJson(BASS_SYSTEM+TASTE_NOTE+EX_NOTE+CHANGE_NOTE+LOCK_NOTE,payload,12000,1400);
+  const r=await aiJson(BASS_SYSTEM+TASTE_NOTE+EX_NOTE+CHANGE_NOTE+LOCK_NOTE+LOCK2_NOTE,payload,12000,1400);
   return r&&r.bass&&typeof r.bass==="object"?r.bass:null;
 }
 function bassTargets(plan){
@@ -1179,6 +1181,9 @@ If the message contains "change" (what the listener just asked for) and "previou
 const LOCK_NOTE=`
 
 LOCKED TO THE KICK: if the message has "kick" (the drummer's kick pattern per section index: 16 characters, x = hit), the bass must lock with it: put a bass note on every kick hit (the first on step 0 or the first kick), then add notes between the kicks. Exception: house/EDM, where the bass plays the gaps between the kicks.`;
+const LOCK2_NOTE=`
+
+MELODY: if the message has "melody" (the written tune for that section index), keep clear of it: where the melody sits on a tension note, play a chord tone (root or 5th) so the bass never sits a half step or a tritone below a melody note.`;
 const RANGE_NOTE=`
 
 RANGE AND FREQUENCY: "ranges" lists each instrument's comfortable range (note names, middle C = C4), its usual lead pitch (lead~) and chord register (chords~). Keep the melody inside the lead instrument's range. The lead and the chord instrument must not live in the same register: if they would, pick a brighter lead, or double the melody an octave up. When the pad, the chord instrument and a double all sit in the low-mids (C3-E4) the song gets muddy: move the double up (oct 12), drop a layer, or clean the pad with "hp". The mix sheet also accepts "tone" (dB from -6 to 6, positive = brighter) and "hp" (a high-pass multiplier from 0.5 to 3; above 1 removes mud; never above 1 on bass). Example: "pad":{"lvl":0.8,"hp":2,"tone":-2}.`;
@@ -1253,6 +1258,20 @@ function kickFor(plan,map,idx){
   const g=gr(m); return g&&typeof g.kick==="string"?g.kick:null;
 }
 function kicksFor(plan,map,targets){ const o={}; (targets||[]).forEach(t=>{ const k=kickFor(plan,map,t.index); if(k) o[t.index]=k; }); return Object.keys(o).length?{kick:o}:{}; }
+/* after the parts land, check them against each other (melody vs bass, total busyness); a clash is fixed by the bassist, who moves under the tune */
+async function reconcileParts(M){
+  try{
+    const cur=M.current&&M.current(), src=cur&&cur.planSrc; if(!src||!M.critique) return;
+    const base=JSON.parse(JSON.stringify(src)), res=M.critique(base), cr=res&&res.cross; if(!cr||cr.score>=95||!cr.issues.length) return;
+    const targets=bassTargets(base); if(!targets.length) return;
+    const km={}; base.sections.forEach((x,i)=>{ if(x&&x.groove&&x.groove.kick) km[i]={groove:x.groove}; });
+    const prev={}, mel={}; targets.forEach(t=>{ const x=base.sections[t.index]; if(x&&x.bassline) prev[t.index]=x.bassline; if(x&&x.mel) mel[t.index]=x.mel; });
+    window.__mctx={style:base.style||cur.style||"",mood:cur.mood||"neutral"};
+    const nb=await fetchBass(base,targets,{change:"fix the clashes with the melody and the busyness",previous:prev,melody:mel,critic:cr.issues,...kicksFor(base,km,targets)}); if(!nb) return;
+    const r2=M.critique(withBass(base,nb)); if(!(r2.cross.score>cr.score)||r2.bass.score<60) return;
+    const c2=M.current&&M.current(); if(!c2||c2.planSrc!==src) return; M.setBass(nb,false); window.__lastCrossScore=r2.cross.score;
+  }catch(e){}
+}
 // Background: the piece starts at once with the engine's own hook and bass; the written parts land from the next section on.
 async function polishMelody(plan,opt){
   opt=opt||{}; const keep=!!opt.keep;
@@ -1330,6 +1349,7 @@ async function polishMelody(plan,opt){
     }catch(e){}
   };
   await Promise.all(level>=2?[melPass(),bassPass(),drumP,orchPass()]:[melPass(),bassPass()]);
+  if(level>=2) await reconcileParts(M);
 }
 // ── SURGICAL REVISIONS: a request about one part rewrites only that part (and re-locks the bass when the drums change); everything else keeps playing ──
 function classifyRevise(ask){
@@ -1417,7 +1437,9 @@ async function runMusic(cmd,curMood){
   }
   if(c==="pause"){ M.pause(); return {chip:"PAUSED"}; }
   if(c==="resume"){ if(!(M.info&&M.info().paused)) return null; M.resume(); return {chip:"RESUMED"}; }
-  if(c==="like"){ if(!act) return {error:"There's nothing playing to save."}; M.like(); return {chip:"SAVED TO YOUR LIKED PIECES"}; }
+  if(c==="like"){ if(!act) return {error:"There's nothing playing to save."}; M.feedback(1); return {chip:"SAVED TO YOUR LIKED PIECES"}; }
+  if(c==="dislike"){ if(!act) return {error:"There's nothing playing."}; M.feedback(-1); const r=await runMusic({cmd:"next"},curMood); return r&&r.info?{...r,note:"Noted, I'll steer away from that."}:{chip:"NOTED · NOT FOR YOU"}; }
+  if(c==="download"){ if(!act) return {error:"There's nothing playing to download."}; downloadWav(M,()=>{},"full"); return {chip:"RENDERING YOUR SONG · IT WILL DOWNLOAD IN A MOMENT"}; }
   if(c==="sleep"){ const mins=Number(cmd.minutes)||0; M.sleep(mins); return {chip:mins>0?"SLEEP TIMER · "+mins+" MIN":"SLEEP TIMER OFF"}; }
   if(c==="saved"){
     if(!M.saved().length) return {error:"You haven't liked any pieces yet — tell me to save one while it plays."};
@@ -1438,7 +1460,7 @@ async function runMusic(cmd,curMood){
     const cur=M.current&&M.current(), inf=M.info&&M.info(), ask=String(cmd.ask||"").trim();
     if(!cur||cur.solo||cur.drums) return {error:"I can rewrite band pieces, not solos or drum solos. Ask for a new piece instead."};
     const cls=classifyRevise(ask);
-    if(cls.part&&cur.planSrc){ const sr=await surgicalRevise(M,cur,ask,cls); if(sr) return sr; }
+    if(cls.part&&cur.planSrc){ const sr=await surgicalRevise(M,cur,ask,cls); if(sr){ reconcileParts(M); return sr; } }
     const np=await reviseMusicPlan(cur,inf,ask);
     if(!np) return {error:"I couldn't rewrite it just now — try again in a moment, or ask for something simpler like a different energy or key."};
     const carried=carryParts(cur.planSrc,np); const nb={mood:cur.mood,intent:cur.intent,plan:np,seed:cur.seed}; const i2=M.play(nb); if(i2) polishMelody(np,{keep:carried>0});
@@ -1497,20 +1519,24 @@ function MusicViz({color,n=5,h=18,w=3}){
     {Array.from({length:n}).map((_,i)=><div key={i} ref={el=>refs.current[i]=el} style={{width:w,height:h,borderRadius:w,background:color,transformOrigin:"center",transform:"scaleY(.2)"}}/>)}
   </div>;
 }
-function downloadWav(M,setBusy){
+// Download: mode "min" = the first minute, "full" = one full pass through the written form; idx = a liked piece (rendered again from its saved plan and seed, so it matches what you heard)
+function downloadWav(M,setBusy,mode,idx){
   setBusy(true);
-  const b=M.current()||{mood:"neutral"};
-  M.exportWav(b,60).then(blob=>{
-    const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
-    a.download="yoecho-"+(M.info().title||"piece").toLowerCase().replace(/[^a-z0-9]+/g,"-")+".wav";
+  const saved=typeof idx==="number", b=saved?M.savedBrief(idx):(M.current()||{mood:"neutral"});
+  if(!b){ setBusy(false); return; }
+  const job=saved?M.exportSaved(idx):(mode==="full"?M.exportSong(b):M.exportWav(b,60));
+  job.then(blob=>{
+    const nm=(saved?b._title:(M.info().title))||"piece", a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+    a.download="yoecho-"+String(nm).toLowerCase().replace(/[^a-z0-9]+/g,"-")+(mode==="min"?"-1min":"")+".wav";
     document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},4000);
   }).catch(()=>{}).finally(()=>setBusy(false));
 }
+function thumbDown(M){ M.feedback(-1); runMusic({cmd:"next"},(M.current()||{}).mood).catch(()=>{}); }
 const mbtn={background:"rgba(196,168,130,.09)",border:"1px solid rgba(196,168,130,.22)",borderRadius:14,padding:"7px 12px",color:"#c4a882",fontSize:10,letterSpacing:".08em",cursor:"pointer",fontFamily:SS,minHeight:34};
 
 // The card inside a chat bubble
 function MusicCard({music,mood}){
-  const live=useMusicInfo(), M=window.EchoMusic, m=MOODS[mood]||MOODS.neutral;
+  const live=useMusicInfo(), M=window.EchoMusic, m=MOODS[mood]||MOODS.neutral, [dlb,setDlb]=useState(false), [vote,setVote]=useState(0);
   if(music.error) return <div style={{marginTop:8,marginLeft:24,fontSize:11,color:"rgba(235,228,216,.5)",fontFamily:SS}}>♫ {music.error}</div>;
   if(music.stopped) return <div style={{marginTop:8,marginLeft:24,fontSize:9,letterSpacing:".12em",color:m.acc,opacity:.5,fontFamily:SS}}>■ MUSIC STOPPED</div>;
   if(music.chip) return <div style={{marginTop:8,marginLeft:24,fontSize:9,letterSpacing:".12em",color:m.acc,opacity:.6,fontFamily:SS}}>♫ {music.chip}</div>;
@@ -1528,7 +1554,9 @@ function MusicCard({music,mood}){
     </div>
     {isLive&&<div style={{display:"flex",gap:8,marginTop:10}}>
       <button onClick={()=>M.next()} style={mbtn}>⏭ NEW ONE</button>
-      <button onClick={()=>M.like()} style={mbtn}>♡ LIKE</button>
+      <button onClick={()=>{M.feedback(1);setVote(1);}} aria-label="Like" style={{...mbtn,opacity:vote===1?1:.85,borderColor:vote===1?m.acc:undefined}}>👍</button>
+      <button onClick={()=>{setVote(-1);thumbDown(M);}} aria-label="Not for me" style={mbtn}>👎</button>
+      <button disabled={dlb} onClick={()=>downloadWav(M,setDlb,"full")} style={{...mbtn,opacity:dlb?.5:1}}>{dlb?"RENDERING…":"⤓ SAVE"}</button>
     </div>}
   </div>;
 }
@@ -1541,10 +1569,12 @@ function MusicControls({M,info,acc}){
     <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:10}}>
       <button style={mbtn} onClick={()=>M.toggle()}>{info.playing?"❚❚ PAUSE":"▶ PLAY"}</button>
       <button style={mbtn} onClick={()=>M.next()}>⏭ NEW</button>
-      <button style={mbtn} onClick={()=>M.like()}>♡ LIKE</button>
+      <button style={mbtn} onClick={()=>M.feedback(1)} aria-label="Like">👍 LIKE</button>
+      <button style={mbtn} onClick={()=>thumbDown(M)} aria-label="Not for me">👎 SKIP</button>
       <button style={mbtn} onClick={()=>M.steer({energy:-.2,bpm:-6})}>− ENERGY</button>
       <button style={mbtn} onClick={()=>M.steer({energy:.2,bpm:6})}>+ ENERGY</button>
-      <button style={{...mbtn,opacity:busy?.5:1}} disabled={busy} onClick={()=>downloadWav(M,setBusy)}>{busy?"RENDERING…":"⤓ SAVE 1 MIN"}</button>
+      <button style={{...mbtn,opacity:busy?.5:1}} disabled={busy} onClick={()=>downloadWav(M,setBusy,"min")}>{busy?"RENDERING…":"⤓ 1 MIN"}</button>
+      <button style={{...mbtn,opacity:busy?.5:1}} disabled={busy} onClick={()=>downloadWav(M,setBusy,"full")}>{busy?"RENDERING…":"⤓ FULL SONG"}</button>
     </div>
     <div style={{fontSize:8,letterSpacing:".14em",color:acc,opacity:.5,fontFamily:SS,marginBottom:6}}>CHANGE THE FEEL</div>
     <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
@@ -1587,6 +1617,7 @@ function MusicScreen({mood,tick,speaking,onBack}){
   const[ps,setPs]=useState("");
   const[pi,setPi]=useState("");
   const[err,setErr]=useState("");
+  const[dl,setDl]=useState(-1);
   const[,bump]=useState(0);
   useEffect(()=>{ loadEchoMusic().then(()=>bump(x=>x+1)).catch(e=>setErr(e.message)); },[]);
   const start=()=>{ setErr(""); runMusic({mood:pm,style:ps||undefined,intent:pi||undefined},pm).then(r=>{ if(r&&r.error) setErr(r.error); }).catch(e=>setErr(e.message)); };
@@ -1622,7 +1653,10 @@ function MusicScreen({mood,tick,speaking,onBack}){
       {err&&<div style={{marginTop:10,fontSize:12,color:"rgba(235,228,216,.55)",fontFamily:SS}}>{err}</div>}
       {saved.length>0&&<div style={{marginTop:26}}>
         <div style={{fontSize:8,letterSpacing:".14em",color:m.acc,opacity:.55,fontFamily:SS,marginBottom:8}}>PIECES YOU LIKED</div>
-        {saved.slice(0,12).map((s,k)=><button key={s.s} onClick={()=>{try{M.unlock();}catch(e){} M.playSaved(k);}} style={{display:"block",width:"100%",textAlign:"left",padding:"11px 14px",marginBottom:7,borderRadius:14,background:"rgba(196,168,130,.07)",border:"1px solid rgba(196,168,130,.15)",color:"rgba(235,228,216,.85)",fontSize:14,fontFamily:SF,cursor:"pointer"}}>♫ {s.t}</button>)}
+        {saved.slice(0,12).map((s,k)=><div key={s.s} style={{display:"flex",gap:7,marginBottom:7}}>
+          <button onClick={()=>{try{M.unlock();}catch(e){} M.playSaved(k);}} style={{flex:1,minWidth:0,textAlign:"left",padding:"11px 14px",borderRadius:14,background:"rgba(196,168,130,.07)",border:"1px solid rgba(196,168,130,.15)",color:"rgba(235,228,216,.85)",fontSize:14,fontFamily:SF,cursor:"pointer",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>♫ {s.t}</button>
+          <button disabled={dl>=0} onClick={()=>downloadWav(M,b=>setDl(b?k:-1),"full",k)} aria-label={"Download "+s.t} style={{...mbtn,opacity:dl>=0?.5:1,minWidth:64}}>{dl===k?"RENDERING…":"⤓ WAV"}</button>
+        </div>)}
       </div>}
       <p style={{marginTop:24,fontSize:11,lineHeight:1.8,color:"rgba(196,168,130,.4)",fontFamily:SS}}>Every piece is composed on your device, from a fresh seed, so it won't repeat. You can also just ask Echo in chat — "play me something to calm down".</p>
     </div>
