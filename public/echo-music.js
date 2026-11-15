@@ -542,6 +542,8 @@
       if (isFinite(Number(x.lvl))) o.lvl = clamp(Number(x.lvl), .4, 1.7);
       if (isFinite(Number(x.rv))) o.rv = clamp(Number(x.rv), 0, 2.2);
       if (isFinite(Number(x.dy))) o.dy = clamp(Number(x.dy), 0, 2.2);
+      if (isFinite(Number(x.tone))) o.tone = clamp(Number(x.tone), -6, 6);
+      if (isFinite(Number(x.hp))) o.hp = clamp(Number(x.hp), .5, 3);
       if (isFinite(Number(x.pan)) && (r === "pad" || r === "comp" || r === "lead" || r === "arp")) o.pan = clamp(Number(x.pan), -.6, .6);
       if (Object.keys(o).length) { out[r] = o; any = true; }
     }
@@ -603,7 +605,7 @@
     function semi(d) { var o = Math.floor(d / n); return sc[d - o * n] + 12 * o; }
     var cur = "plan", parts = { orch: { pen: 0, issues: [] }, plan: { pen: 0, issues: [] }, mel: { pen: 0, issues: [] }, bass: { pen: 0, issues: [] }, drums: { pen: 0, issues: [] } };
     function note(msg, w) { issues.push(msg); pen += w; parts[cur].pen += w; parts[cur].issues.push(msg); }
-    var sections = pl.sections, avgPitch = {}, i, j;
+    var sections = pl.sections, avgPitch = {}, melRange = {}, i, j;
     var chorusCount = 0, hasContrast = false, uniq = {};
     sections.forEach(function (sx) { if (sx.kind === "chorus" || sx.kind === "drop") chorusCount++; if (/bridge|solo|break|build/.test(sx.kind)) hasContrast = true; sx.chords.forEach(function (c) { uniq[c.rs + c.q] = 1; }); });
     if (Object.keys(uniq).length < 4) note("The harmony is too small: use at least 4 different chords across the piece.", 12);
@@ -627,13 +629,13 @@
       if (hi - lo < 4 && seq.length > 6) note(tag + "the melody barely moves (range " + (hi - lo) + " semitones); give it a clear rise and fall.", 8);
       for (j = 0; j < seq.length; j++) {
         sumP += seq[j].p; durs[seq[j].len] = 1;
-        if (j > 0) { var iv = Math.abs(seq[j].p - seq[j - 1].p); total++; if (iv === 0) repeats++; else if (iv <= 2) steps++; else if (iv > 5) leaps++; if (iv > 9) note(tag + "a leap of " + iv + " semitones before bar " + (seq[j].b + 1) + " is too large.", 3); }
+        if (j > 0) { var iv = Math.abs(seq[j].p - seq[j - 1].p); total++; if (iv === 0) repeats++; else if (iv <= 3) steps++; else if (iv > 5) leaps++; if (iv > 9) note(tag + "a leap of " + iv + " semitones before bar " + (seq[j].b + 1) + " is too large.", 3); }
         if (seq[j].s % 4 === 0) {
           strong++; var ch = sx.chords[(seq[j].b) % sx.chords.length], pcs = ch.abs.map(function (x) { return (ch.rs + x) % 12; });
           if (pcs.indexOf(((seq[j].p % 12) + 12) % 12) >= 0) strongOk++;
         }
       }
-      avgPitch[i] = sumP / seq.length;
+      avgPitch[i] = sumP / seq.length; melRange[i] = { lo: lo, hi: hi };
       if (total) {
         if (leaps / total > .3) note(tag + "too many leaps (" + Math.round(100 * leaps / total) + "%); mostly use steps with an occasional jump.", 7);
         if (repeats / total > .4) note(tag + "too many repeated notes (" + Math.round(100 * repeats / total) + "%); vary the pitches.", 6);
@@ -679,6 +681,12 @@
       });
       if (sx.gv.b && sx.gv.b === sx.gv.a) note(tag + "the second bar is identical to the first.", 1);
     });
+    sections.forEach(function (sx) {
+      if (!sx.bl || !sx.gv || !sx.gv.a || !sx.gv.a.kick) return; var st = pl.style || ""; if (st === "house" || st === "edm" || st === "ambient") return;
+      cur = "bass"; var kk = [], q, on = {}; for (q = 0; q < 16; q++) if (sx.gv.a.kick.charAt(q) !== ".") kk.push(q); if (!kk.length || !sx.bl[0]) return;
+      sx.bl[0].forEach(function (x) { on[x.s] = 1; }); var hit = kk.filter(function (k) { return on[k]; }).length;
+      if (hit / kk.length < .6) note("Bass, section " + sx.src + " (" + sx.kind + "): the bass and the kick are not locked: only " + hit + " of " + kk.length + " kick hits (steps " + kk.join(",") + ") have a bass note under them; play the bass on the kick hits.", 8);
+    });
     cur = "orch";
     (function () {
       var base = pl.band || {}, famOf = function (nm) { return nm && INSTR_META[nm] ? INSTR_META[nm].fam : ""; };
@@ -697,6 +705,17 @@
         if (sus > 2) note(tag + "too many sustained instruments at once (" + sus + "); it will sound muddy. Keep at most two of strings, pad, choir and violin.", 6);
         if (sx.dbl && sx.dbl.o === 0 && (sx.dbl.i === b.lead)) note(tag + "the melody double is the same instrument at the same pitch; use another instrument or an octave.", 5);
         if (sx.dbl && sx.lead === "none") note(tag + "a melody double needs a lead melody to double.", 3);
+        var si = sections.indexOf(sx), mr = melRange[si], ld = b.lead, R = ld && INSTR_RANGE[ld];
+        if (mr && R && sx.lead !== "none") {
+          var org = placeInRange(pl.key, (LEAD_CENTER[ld] || 70) - 13, (LEAD_CENTER[ld] || 70) - 2), lo = org + mr.lo, hi = org + mr.hi;
+          if (lo < R[0] - 1) note(tag + "the melody drops to " + noteName(lo) + ", below the " + ld + "'s range (" + noteName(R[0]) + "-" + noteName(R[1]) + "); choose a lower instrument or a higher melody.", 5);
+          if (hi > R[1] + 1) note(tag + "the melody climbs to " + noteName(hi) + ", above the " + ld + "'s range (" + noteName(R[0]) + "-" + noteName(R[1]) + "); choose a higher instrument or a lower melody.", 5);
+          var cc2 = b.comp && b.comp !== "none" ? (COMP_CENTER[b.comp] || 62) : 0;
+          if (cc2 && lo < cc2 - 6) note(tag + "the lead's lowest note (" + noteName(lo) + ") is far below the chord instrument's centre (" + noteName(cc2) + "); it will be buried in the chords.", 3);
+        }
+        var crowd = 0; if (b.pad && b.pad !== "none") crowd++; if (b.comp && b.comp !== "none" && (COMP_CENTER[b.comp] || 62) <= 64) crowd++;
+        if (sx.dbl && sx.dbl.o <= 0 && /sus|bowed|wind|reed/.test(famOf(sx.dbl.i))) crowd++; if (b.ans && b.ans !== "none") crowd++;
+        if (crowd >= 4) note(tag + "four parts crowd the low-mids (C3-E4): pad, chords" + (sx.dbl ? ", the double" : "") + "; move the double up an octave, drop one, or high-pass the pad (mix hp 1.5-2.5).", 4);
         if (sx.kind === "bridge" && !sx.band && !sx.dbl && changed && sections.length >= 6) note(tag + "the bridge should sound different: change the lead or the chords' instrument for it.", 3);
       });
       var m = pl.mix; if (m) {
@@ -704,6 +723,8 @@
         if (m.pad && m.pad.lvl > 1.4) note("Mix: the pad is too loud; it will swamp everything.", 5);
         ["pad", "comp", "lead", "arp", "bass", "drums"].forEach(function (r) { if (m[r] && m[r].rv > 1.8) note("Mix: too much reverb on the " + r + "; it will wash out.", 4); });
         if (m.bass && m.bass.rv > .6) note("Mix: reverb on the bass makes it muddy; keep it near zero.", 6);
+        if (m.bass && m.bass.hp > 1.4) note("Mix: do not high-pass the bass (hp above 1.4 thins it out); keep it at 1 or less.", 5);
+        if (m.lead && m.lead.tone > 4) note("Mix: lead tone above +4 dB will sound harsh.", 3);
         if (m.drums && m.bass && m.bass.lvl > 1.5 && m.drums.lvl < .8) note("Mix: the bass is far louder than the drums.", 4);
       } else if (changed) note("There is no mix sheet: set level, reverb and delay for each part to suit the song.", 3);
     })();
@@ -737,7 +758,7 @@
     return done;
   }
   /* live orchestration: per-section bands and doubles, plus the mix sheet; sections take their band at their next start, the mix eases in at the next bar */
-  function setOrchestra(o) {
+  function setOrchestra(o, now) {
     var pc = P.piece; if (!pc || !pc.comp || !pc.comp.spec || !pc.comp.spec.plan || !o) return 0;
     var plan = pc.comp.spec.plan, raw = P.lastBrief && (P.lastBrief.planSrc || P.lastBrief.plan), done = 0, secs = o.sections || {};
     plan.sections.forEach(function (ps) {
@@ -747,11 +768,12 @@
       if (raw && typeof raw === "object" && Array.isArray(raw.sections) && raw.sections[ps.src]) { var rs = raw.sections[ps.src]; if (b) rs.band = m.band; else delete rs.band; if (d) rs.double = m.double; else delete rs.double; }
     });
     var mx = parseMixSheet(o.mix); if (mx) { plan.mix = mx; done++; if (raw && typeof raw === "object") raw.mix = o.mix; }
-    if (done) resaveIfLiked();
+    if (done) { resaveIfLiked(); if (now) refreshNow(); }
     return done;
   }
-  function setBass(map) { var n = setPart(map, "bl", "blBars", parseBassLine); if (n) resaveIfLiked(); return n; }
-  function setDrums(map) {
+  function refreshNow() { try { var c = P.piece && P.piece.comp; if (c && c.refresh) c.refresh(); } catch (e) {} }
+  function setBass(map, now) { var n = setPart(map, "bl", "blBars", parseBassLine); if (n) { resaveIfLiked(); if (now) refreshNow(); } return n; }
+  function setDrums(map, now) {
     var pc = P.piece; if (!pc || !pc.comp || !pc.comp.spec || !pc.comp.spec.plan || !map) return 0;
     var plan = pc.comp.spec.plan, raw = P.lastBrief && (P.lastBrief.planSrc || P.lastBrief.plan), done = 0;
     plan.sections.forEach(function (ps) {
@@ -763,13 +785,13 @@
     var sg = function (x) { return x.kind + "|" + x.chords.map(function (c) { return c.rs + c.q; }).join(); }, sn = {};
     plan.sections.forEach(function (x) { if (x.gv && !sn[sg(x)]) sn[sg(x)] = x; });
     plan.sections.forEach(function (x) { if (!x.gv && sn[sg(x)] && x.drums > 0) x.gv = sn[sg(x)].gv; });
-    if (done) resaveIfLiked();
+    if (done) { resaveIfLiked(); if (now) refreshNow(); }
     return done;
   }
   /* a piece liked before its written parts arrived is saved again with them */
   function resaveIfLiked() { try { var pc = P.piece; if (!pc) return; var s0 = seedStr(pc); if (taste.seeds.some(function (x) { return x.s === s0; })) saveTaste(); } catch (e) {} }
   /* put (or replace) written melodies into the plan that is playing; they take effect from the next section */
-  function setMelodies(map) {
+  function setMelodies(map, now) {
     var pc = P.piece; if (!pc || !pc.comp || !pc.comp.spec || !pc.comp.spec.plan || !map) return 0;
     var plan = pc.comp.spec.plan, raw = P.lastBrief && (P.lastBrief.planSrc || P.lastBrief.plan), done = 0;
     plan.sections.forEach(function (ps) {
@@ -781,7 +803,7 @@
     var sg = function (x) { return x.kind + "|" + x.chords.map(function (c) { return c.rs + c.q; }).join(); }, sn = {};
     plan.sections.forEach(function (x) { if (x.mel && !sn[sg(x)]) sn[sg(x)] = x; });
     plan.sections.forEach(function (x) { if (!x.mel && x.lead !== "none" && sn[sg(x)]) { x.mel = sn[sg(x)].mel; x.melBars = sn[sg(x)].melBars; } });
-    if (done) resaveIfLiked();
+    if (done) { resaveIfLiked(); if (now) refreshNow(); }
     return done;
   }
 
@@ -927,6 +949,11 @@
    */
   var LEAD_CENTER = { vox: 69, hum: 64, ooh: 68, synthchoir: 68, flute: 74, kalimba: 76, bells: 84, piano: 69, keys: 67, guitar: 66, marimba: 72, strings: 69, brass: 63, sax: 66, violin: 76, synth: 72, organ: 64, pluck: 70, pad: 66, choir: 66, eguitar: 68, dguitar: 60, lguitar: 72, hammond: 66, horns: 64, clav: 66 };
   var ARP_CENTER = { bells: 84, kalimba: 79, pluck: 74, guitar: 70, piano: 74, synth: 76, marimba: 76, keys: 72, strings: 72 };
+  /* comfortable range of each melodic instrument in MIDI notes (60 = middle C): the arranger and the critic use it so a tune is never written below or above what the instrument can say */
+  var INSTR_RANGE = { piano: [36, 96], keys: [40, 92], organ: [36, 88], hammond: [36, 88], guitar: [40, 84], eguitar: [40, 86], lguitar: [45, 90], dguitar: [36, 76], pluck: [40, 96], harp: [36, 100], clav: [40, 88],
+    kalimba: [60, 96], marimba: [48, 96], bells: [72, 108], strings: [36, 96], pad: [36, 90], choir: [48, 84], ooh: [52, 81], synthchoir: [48, 84], vox: [55, 81], hum: [52, 76],
+    flute: [60, 96], brass: [40, 80], horns: [40, 82], sax: [49, 81], violin: [55, 100], synth: [36, 96] };
+  function noteName(m) { return NOTE_NAMES[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1); }
   var COMP_CENTER = { eguitar: 55, dguitar: 48, hammond: 58, horns: 60, clav: 66, lguitar: 60, guitar: 57, piano: 62, keys: 62, organ: 58, marimba: 64, strings: 58, pad: 58 };
   var BASS_LOW = { ebass: 28, upbass: 28, sub: 31, "808": 31, log: 33, pluck: 33, synthbass: 33 };
   var BASE_VEL = { pad: .55, comp: .7, lead: .85, arp: .55, bass: .9 };
@@ -1513,6 +1540,12 @@
       S.secStartBarNo = S.barNo;
     }
 
+    /* apply written parts to the section that is already playing (used when the listener asks for a change) */
+    function refreshSection() {
+      if (!PLAN || !S.sec || !S.planIdx) return false; var ps = PLAN.sections[(S.planIdx - 1) % PLAN.sections.length]; if (!ps) return false;
+      applySectionBand(ps); S.sec.dbl = ps.dbl || null; S.sec.mel = ps.mel || null; S.sec.melBars = ps.melBars || 0; S.sec.bl = ps.bl || null; S.sec.blBars = ps.blBars || 0; S.sec.gv = ps.gv || null;
+      return true;
+    }
     /* what a band does without thinking: bass leans into the kick, hats breathe (strong/weak), a phrase swells across its four bars */
     function humanize(ev) {
       var kicks = {}, i, e, pb = S.secBar % 4, swell = 1 + .025 * pb;
@@ -1610,7 +1643,7 @@
       return { solo: spec.solo || "", drums: !!spec.drums, planned: !!PLAN, root: S.root, modeName: S.mode, seed: seed, title: spec.title, mood: spec.stages[Math.max(0, S.stage)].mood, journey: spec.stages.map(function (s) { return s.mood; }), intent: spec.intent,
                style: S.styleName, styleName: S.style ? S.style.name : "", bpm: Math.round(S.bpm), key: NOTE_NAMES[S.root] + " " + MODE_LABEL[S.mode], palette: S.pal, section: S.sec ? S.sec.kind : "", bar: S.barNo, muted: Object.keys(S.mask).filter(function (k) { return S.mask[k] === false; }) };
     }
-    return { spec: spec, seed: seed, nextBar: nextBar, steer: steer, info: info, release: release, hold: hold, state: function () { return S; } };
+    return { spec: spec, seed: seed, refresh: refreshSection, nextBar: nextBar, steer: steer, info: info, release: release, hold: hold, state: function () { return S; } };
   }
 
   /* ═══════════════ 5. engine ═══════════════
@@ -1818,13 +1851,15 @@
       lvl.gain.value = c.lvl;
       if (c.duck > 0) { dk = ctx.createGain(); inn.connect(dk); node = dk; ducks.push({ g: dk, k: c.duck }); }
       var last = node;
-      if (c.hp) { var hf = ctx.createBiquadFilter(); hf.type = "highpass"; hf.frequency.value = c.hp; hf.Q.value = .6; last.connect(hf); last = hf; }
+      var hf = null, ts = ctx.createBiquadFilter();
+      if (c.hp) { hf = ctx.createBiquadFilter(); hf.type = "highpass"; hf.frequency.value = c.hp; hf.Q.value = .6; last.connect(hf); last = hf; }
       if (c.pk) { var pf = ctx.createBiquadFilter(); pf.type = "peaking"; pf.frequency.value = c.pk[0]; pf.gain.value = c.pk[1]; pf.Q.value = c.pk[2] || .9; last.connect(pf); last = pf; }
+      ts.type = "highshelf"; ts.frequency.value = 3000; ts.gain.value = 0; last.connect(ts); last = ts;
       if (c.cmp && !E.lite) { var cm = ctx.createDynamicsCompressor(); cm.threshold.value = c.cmp[0]; cm.ratio.value = c.cmp[1]; cm.attack.value = c.cmp[2]; cm.release.value = c.cmp[3]; cm.knee.value = 8; last.connect(cm); last = cm; }
       last.connect(lvl); lvl.connect(premix);
       rv.gain.value = c.rv; dy.gain.value = c.dy;
       lvl.connect(rv); rv.connect(rvIn); lvl.connect(dy); dy.connect(dIn);
-      E.strips[name] = { in: inn, lvl: lvl, rv: rv, dy: dy, cfg: c, pan: undefined };
+      E.strips[name] = { in: inn, lvl: lvl, rv: rv, dy: dy, cfg: c, pan: undefined, hf: hf, ts: ts };
     });
     function kickDuck(t) {
       if (E.duckDepth <= 0) return;
@@ -2303,6 +2338,8 @@
         if (x.lvl !== undefined) st.lvl.gain.setTargetAtTime(st.cfg.lvl * x.lvl, t, .4);
         if (x.rv !== undefined) st.rv.gain.setTargetAtTime(st.cfg.rv * x.rv, t, .4);
         if (x.dy !== undefined) st.dy.gain.setTargetAtTime(st.cfg.dy * x.dy, t, .4);
+        if (x.tone !== undefined) st.ts.gain.setTargetAtTime(x.tone, t, .4);
+        if (x.hp !== undefined && st.hf) st.hf.frequency.setTargetAtTime(st.cfg.hp * x.hp, t, .4);
         if (x.pan !== undefined) st.pan = x.pan; }
     };
     E.note = function (ev, t, bar) {
@@ -2739,6 +2776,263 @@
   function exportMixWav(opts, seconds) { return renderMix(opts, seconds || 120, { lite: false }).then(toWav); }
   function exportWav(brief, seconds) { return render(brief, seconds || 60, { lite: false }).then(toWav); }
 
+  /* ═══════════════ genre exemplars ═══════════════
+   * One hand-written, professionally structured piece per genre. They are never played; they are shown to the LLM writers as "this is what good looks like"
+   * (planner: form, chords, band, motif; melody writer: the verse/chorus tune; bass and drum writers: the bassline and groove). Every one scores 100 on the critic. */
+/* Hand-written exemplars: one professionally structured piece per genre. Notation helpers keep it compact.
+   N("bar:step:deg:len ...")  melody notes;  B("bar:step:tone:len ...")  bass notes. */
+  function N(s) { return s.trim().split(/\s+/).map(function (x) { var p = x.split(":"); return [+p[0], +p[1], +p[2], +p[3]]; }); }
+  function B(s) { return s.trim().split(/\s+/).map(function (x) { var p = x.split(":"); return [+p[0], +p[1], p[2], +p[3]]; }); }
+  function Sx(kind, bars, energy, chords, o) { var x = { kind: kind, bars: bars, energy: energy, chords: chords.split(" "), lead: "theme", drums: 2 }; for (var k in o) x[k] = o[k]; return x; }
+  var EX = {};
+
+  EX.pop = { title: "Golden Hour", key: "C", mode: "major", bpm: 100, style: "pop", moods: ["joy", "hope", "love"],
+    band: { pad: "pad", comp: "piano", lead: "keys", arp: "none", bass: "ebass" }, motif: { on: [0, 4, 6, 8], deg: [4, 2, 4, 5] },
+    sections: [
+      Sx("intro", 4, .3, "C G Am F", { lead: "none", drums: 0 }),
+      Sx("verse", 8, .5, "C G Am F", { drums: 1, mel: N("0:0:4:3 0:4:2:2 0:6:4:2 0:8:5:2 0:10:4:2 0:12:2:4 1:0:1:4 1:4:1:2 1:6:2:2 1:8:1:2 1:10:0:2 1:12:-1:4 2:0:2:4 2:4:2:2 2:6:0:2 2:8:2:4 2:12:0:4 3:0:0:4 3:4:5:2 3:6:3:2 3:8:0:8"),
+        bassline: B("0:0:R:3 0:4:R:3 0:8:5:3 0:12:R:2 0:14:a:2"), groove: { kick: "x.......x.......", snare: "....x.......x...", hat: "x.x.x.x.x.x.x.x." } }),
+      Sx("chorus", 8, .9, "F C G Am", { mel: N("0:0:5:4 0:4:5:2 0:6:7:2 0:8:5:4 0:12:3:4 1:0:7:4 1:4:7:2 1:6:6:2 1:8:4:4 1:12:2:4 2:0:6:4 2:4:6:2 2:6:7:2 2:8:6:4 2:12:4:4 3:0:7:6 3:6:5:2 3:8:2:8"),
+        bassline: B("0:0:R:2 0:2:R:2 0:4:R:2 0:6:R:2 0:8:5:3 0:11:5:1 0:12:R:2 0:14:a:2"), groove: { kick: "x.....x.x.x.....", snare: "....x.......x...", clap: "....x.......x...", hat: "x.x.x.x.x.x.x.x.", open: "......x.......x." } }),
+      Sx("verse", 8, .55, "C G Am F", { drums: 1 }),
+      Sx("chorus", 8, .95, "F C G Am", {}),
+      Sx("bridge", 4, .4, "Am Em F G", { lead: "sparse", drums: 1 }),
+      Sx("chorus", 8, 1, "F C G Am", {}),
+      Sx("outro", 4, .3, "F C G C", { lead: "sparse", drums: 0 })] };
+
+  EX.rock = { title: "Thunder Road Home", key: "E", mode: "minor", bpm: 124, style: "rock", moods: ["anger", "joy"],
+    band: { pad: "none", comp: "dguitar", lead: "lguitar", arp: "none", bass: "ebass" }, motif: { on: [0, 3, 6, 8], deg: [4, 4, 2, 0] },
+    sections: [
+      Sx("intro", 4, .5, "E5 E5 D5 A5", { lead: "none", drums: 1 }),
+      Sx("verse", 8, .6, "E5 E5 D5 A5", { drums: 2, mel: N("0:0:4:4 0:4:4:2 0:6:2:2 0:8:0:4 0:12:4:4 1:0:4:4 1:4:2:2 1:6:0:2 1:8:4:6 2:0:3:4 2:4:3:2 2:6:2:2 2:8:3:4 2:12:6:4 3:0:3:4 3:4:4:2 3:6:3:2 3:8:0:8"),
+        bassline: B("0:0:R:3 0:3:R:1 0:4:R:2 0:6:R:2 0:8:R:3 0:11:R:1 0:12:R:2 0:14:a:2"), groove: { kick: "x.......x.x.....", snare: "....x.......x...", hat: "x.x.x.x.x.x.x.x." } }),
+      Sx("chorus", 8, .95, "C5 D5 E5 E5", { mel: N("0:0:9:4 0:4:9:2 0:6:7:2 0:8:9:4 0:12:7:4 1:0:10:4 1:4:10:2 1:6:9:2 1:8:10:4 1:12:8:4 2:0:11:4 2:4:11:2 2:6:10:2 2:8:11:4 2:12:7:4 3:0:11:6 3:6:9:2 3:8:7:8"),
+        bassline: B("0:0:R:2 0:2:R:2 0:4:R:2 0:6:R:2 0:8:R:2 0:10:R:2 0:12:5:3 0:15:a:1"), groove: { kick: "x.....x.x.x.....", snare: "....X.......X...", hat: "x.x.x.x.x.x.x.x.", open: "..............x." } }),
+      Sx("verse", 8, .65, "E5 E5 D5 A5", {}),
+      Sx("chorus", 8, 1, "C5 D5 E5 E5", {}),
+      Sx("solo", 8, .9, "E5 C5 D5 E5", { lead: "varied" }),
+      Sx("chorus", 8, 1, "C5 D5 E5 E5", {}),
+      Sx("outro", 4, .6, "E5 D5 A5 E5", { lead: "sparse", drums: 1 })] };
+
+  EX.rocknroll = { title: "Shake It Tonight", key: "A", mode: "mixolydian", bpm: 150, style: "rocknroll", moods: ["joy"],
+    band: { pad: "none", comp: "piano", lead: "eguitar", arp: "none", bass: "upbass" }, motif: { on: [0, 3, 4, 8], deg: [2, 4, 0, 2] },
+    sections: [
+      Sx("intro", 4, .5, "A7 A7 E7 E7", { lead: "none", drums: 1 }),
+      Sx("verse", 12, .7, "A7 A7 A7 A7 D7 D7 A7 A7 E7 D7 A7 E7", { mel: N("0:0:4:3 0:4:2:2 0:6:0:2 0:8:2:4 0:12:4:4 1:0:4:3 1:4:2:2 1:6:0:2 1:8:2:4 1:12:0:4 2:0:2:3 2:4:4:2 2:6:2:2 2:8:0:4 2:12:2:4 3:0:4:6 3:8:2:2 3:10:0:2 3:12:0:4"),
+        bassline: B("0:0:R:2 0:2:3:2 0:4:5:2 0:6:6:2 0:8:8:3 0:11:6:1 0:12:5:2 0:14:3:2"), groove: { kick: "x.....x.x.......", snare: "....x.......x...", hat: "x.x.x.x.x.x.x.x." } }),
+      Sx("verse", 12, .8, "A7 A7 A7 A7 D7 D7 A7 A7 E7 D7 A7 E7", {}),
+      Sx("solo", 12, .9, "A7 A7 A7 A7 D7 D7 A7 A7 E7 D7 A7 E7", { lead: "varied" }),
+      Sx("chorus", 8, 1, "A D A E", { mel: N("0:0:7:3 0:3:7:1 0:4:9:4 0:8:7:2 0:10:4:2 0:12:2:4 1:0:5:3 1:3:5:1 1:4:7:4 1:8:5:4 1:12:3:4 2:0:4:3 2:3:4:1 2:4:7:4 2:8:4:4 2:12:2:4 3:0:4:4 3:4:1:4 3:8:4:8"),
+        bassline: B("0:0:R:2 0:2:3:2 0:4:5:2 0:6:6:2 0:8:8:3 0:11:6:1 0:12:5:2 0:14:3:2"), groove: { kick: "x.....x.x.......", snare: "....x.......x...", hat: "x.x.x.x.x.x.x.x." } }),
+      Sx("verse", 12, .9, "A7 A7 A7 A7 D7 D7 A7 A7 E7 D7 A7 E7", {}),
+      Sx("outro", 4, .6, "A7 D7 A7 E7", { lead: "sparse", drums: 1 })] };
+
+  EX.blues = { title: "Slow Burn Blues", key: "E", mode: "mixolydian", bpm: 78, style: "blues", moods: ["sadness", "love"],
+    band: { pad: "none", comp: "hammond", lead: "lguitar", arp: "none", bass: "upbass" }, motif: { on: [0, 4, 8, 10], deg: [4, 2, 0, 2] },
+    sections: [
+      Sx("intro", 4, .4, "E7 A7 E7 B7", { lead: "none", drums: 1 }),
+      Sx("verse", 12, .6, "E7 A7 E7 E7 A7 A7 E7 E7 B7 A7 E7 B7", { drums: 1, mel: N("0:0:4:4 0:4:2:2 0:6:0:2 0:8:2:6 1:0:5:4 1:4:3:2 1:6:5:2 1:8:0:2 1:10:1:2 1:12:0:4 2:0:4:4 2:4:2:2 2:6:0:2 2:8:4:4 2:12:2:4 3:0:2:4 3:4:0:4 3:8:0:8"),
+        bassline: B("0:0:R:4 0:4:3:2 0:6:5:2 0:8:6:4 0:12:5:2 0:14:3:2"), groove: { kick: "x.......x.......", snare: "....x.......x...", hat: "x.x.x.x.x.x.x.x." } }),
+      Sx("verse", 12, .7, "E7 A7 E7 E7 A7 A7 E7 E7 B7 A7 E7 B7", { drums: 2 }),
+      Sx("solo", 12, .9, "E7 A7 E7 E7 A7 A7 E7 E7 B7 A7 E7 B7", { lead: "varied", drums: 2 }),
+      Sx("chorus", 8, .95, "E9 A9 E9 E9 A9 A9 B7 E9", { drums: 2, mel: N("0:0:4:4 0:4:4:2 0:6:2:2 0:8:0:4 0:12:2:4 1:0:5:4 1:4:5:2 1:6:3:2 1:8:5:4 1:12:7:4 2:0:4:4 2:4:2:2 2:6:0:2 2:8:2:4 2:12:4:4 3:0:2:4 3:4:0:4 3:8:0:8"),
+        bassline: B("0:0:R:4 0:4:3:2 0:6:5:2 0:8:6:4 0:12:5:2 0:14:3:2"), groove: { kick: "x.......x.......", snare: "....x.......x...", hat: "x.x.x.x.x.x.x.x." } }),
+      Sx("verse", 12, .7, "E7 A7 E7 E7 A7 A7 E7 E7 B7 A7 E7 B7", { drums: 2 }),
+      Sx("outro", 4, .4, "E7 A7 E7 B7", { lead: "sparse", drums: 1 })] };
+
+  EX.jazz = { title: "Blue Room Late", key: "C", mode: "ionian", bpm: 118, style: "jazz", moods: ["love", "neutral", "joy"],
+    band: { pad: "none", comp: "piano", lead: "sax", arp: "none", bass: "upbass" }, motif: { on: [0, 3, 6, 8], deg: [4, 6, 5, 4] },
+    sections: [
+      Sx("head", 8, .6, "Dm7 G7 Cmaj7 A7", { mel: N("0:0:5:4 0:4:3:2 0:6:5:2 0:8:6:4 0:12:5:4 1:0:6:4 1:4:4:2 1:6:6:2 1:8:7:4 1:12:6:4 2:0:7:6 2:6:4:2 2:8:2:4 2:12:4:4 3:0:5:4 3:4:3:2 3:6:5:2 3:8:4:8"),
+        bassline: B("0:0:R:4 0:4:3:4 0:8:5:4 0:12:a:4"), groove: { ride: "x...x.xx...x.x..", rim: "....x.......x...", kick: "x.......x.......", snare: "..........o....." }, drums: 1 }),
+      Sx("solo", 16, .8, "Dm7 G7 Cmaj7 A7 Dm7 G7 Cmaj7 A7", { lead: "varied", drums: 1 }),
+      Sx("trade", 8, .85, "Dm7 G7 Cmaj7 A7", { lead: "varied", drums: 1 }),
+      Sx("chorus", 8, .7, "Dm7 G7 Cmaj7 A7", { drums: 1, mel: N("0:0:5:4 0:4:3:2 0:6:5:2 0:8:6:4 0:12:5:4 1:0:6:4 1:4:4:2 1:6:6:2 1:8:7:4 1:12:6:4 2:0:7:6 2:6:4:2 2:8:2:4 2:12:4:4 3:0:5:4 3:4:3:2 3:6:5:2 3:8:4:8"),
+        bassline: B("0:0:R:4 0:4:3:4 0:8:5:4 0:12:a:4"), groove: { ride: "x...x.xx...x.x..", rim: "....x.......x...", kick: "x.......x.......", snare: "..........o....." } }),
+      Sx("outro", 4, .4, "Dm7 G7 Cmaj7 Cmaj7", { lead: "sparse", drums: 0 })] };
+
+  EX.reggae = { title: "Island Morning", key: "G", mode: "ionian", bpm: 76, style: "reggae", moods: ["joy", "hope", "love"],
+    band: { pad: "none", comp: "organ", lead: "guitar", arp: "none", bass: "ebass" }, motif: { on: [0, 4, 8, 12], deg: [4, 2, 4, 5] },
+    sections: [
+      Sx("intro", 4, .4, "G D Em C", { lead: "none", drums: 1 }),
+      Sx("verse", 8, .55, "G D Em C", { drums: 1, mel: N("0:0:4:6 0:8:2:4 0:12:4:4 1:0:5:6 1:8:4:4 1:12:1:4 2:0:2:6 2:8:4:4 2:12:2:4 3:0:0:6 3:8:2:4 3:12:0:4"),
+        bassline: B("0:2:R:6 0:8:5:4 0:12:R:4"), groove: { kick: "........x.......", rim: "........x.......", hat: "x.x.x.x.x.x.x.x.", shaker: "o.o.o.o.o.o.o.o." } }),
+      Sx("chorus", 8, .8, "C G Am D", { mel: N("0:0:7:6 0:8:5:4 0:12:3:4 1:0:2:6 1:8:4:4 1:12:7:4 2:0:5:6 2:8:8:4 2:12:5:4 3:0:6:6 3:8:4:8"),
+        bassline: B("0:2:R:6 0:8:5:4 0:12:8:4"), groove: { kick: "........x.......", rim: "........x.......", hat: "x.x.x.x.x.x.x.x.", shaker: "o.o.o.o.o.o.o.o.", open: "......x.......x." } }),
+      Sx("verse", 8, .6, "G D Em C", { drums: 1 }),
+      Sx("chorus", 8, .85, "C G Am D", {}),
+      Sx("bridge", 4, .45, "Em C G D", { lead: "sparse", drums: 1 }),
+      Sx("chorus", 8, .9, "C G Am D", {}),
+      Sx("outro", 4, .35, "G D Em G", { lead: "sparse", drums: 1 })] };
+
+  EX.funk = { title: "Pocket Money", key: "E", mode: "dorian", bpm: 104, style: "funk", moods: ["joy", "anger"],
+    band: { pad: "none", comp: "eguitar", lead: "horns", arp: "none", bass: "ebass" }, motif: { on: [0, 3, 6, 10], deg: [4, 4, 2, 0] },
+    sections: [
+      Sx("intro", 4, .5, "Em7 Em7 A7 Em7", { lead: "none", drums: 1 }),
+      Sx("verse", 8, .65, "Em7 Em7 A7 Em7", { mel: N("0:0:4:2 0:3:4:1 0:6:2:2 0:10:0:2 0:12:4:4 1:0:4:2 1:3:4:1 1:6:2:2 1:10:0:2 1:12:2:4 2:0:5:3 2:3:3:1 2:6:5:2 2:10:3:2 2:12:0:4 3:0:4:2 3:3:2:1 3:6:0:2 3:10:2:2 3:12:0:4"),
+        bassline: B("0:0:R:2 0:3:R:1 0:6:b7:2 0:8:5:2 0:10:R:2 0:14:a:2"), groove: { kick: "X..x..x...x..x..", snare: "....X..o....X..o", hat: "x.xxx.xxx.xxx.xx", open: "......x.......x." } }),
+      Sx("chorus", 8, .95, "A7 A7 Em7 Em7", { mel: N("0:0:7:2 0:3:7:1 0:6:5:2 0:10:3:2 0:12:7:4 1:0:7:2 1:3:7:1 1:6:5:2 1:10:3:2 1:12:5:4 2:0:9:4 2:6:7:2 2:8:4:2 2:12:7:4 3:0:9:4 3:6:7:2 3:8:4:8"),
+        bassline: B("0:0:R:2 0:3:R:1 0:6:5:2 0:8:b7:2 0:10:R:2 0:14:a:2"), groove: { kick: "X..x..x..x.x..x.", snare: "....X..o....X.oo", clap: "....x.......x...", hat: "xxxxxxxxxxxxxxxx", open: "..x...x...x...x." } }),
+      Sx("verse", 8, .7, "Em7 Em7 A7 Em7", {}),
+      Sx("chorus", 8, 1, "A7 A7 Em7 Em7", {}),
+      Sx("break", 4, .4, "Gmaj7 A7 Bm7 Em7", { lead: "none", drums: 1 }),
+      Sx("chorus", 8, 1, "A7 A7 Em7 Em7", {}),
+      Sx("outro", 4, .5, "Em7 A7 Em7 Em7", { lead: "sparse", drums: 1 })] };
+
+  EX.hiphop = { title: "Concrete Sunrise", key: "A", mode: "minor", bpm: 88, style: "hiphop", moods: ["anger", "sadness", "neutral"],
+    band: { pad: "pad", comp: "keys", lead: "bells", arp: "none", bass: "808" }, motif: { on: [0, 3, 8, 10], deg: [4, 2, 0, 2] },
+    sections: [
+      Sx("intro", 4, .4, "Am7 Am7 Fmaj7 G", { lead: "none", drums: 0 }),
+      Sx("verse", 8, .65, "Am7 Am7 Fmaj7 G", { mel: N("0:0:4:4 0:6:2:2 0:8:0:4 0:12:2:4 1:0:4:6 1:8:2:4 1:12:0:4 2:0:3:4 2:6:5:2 2:8:3:4 2:12:0:4 3:0:1:4 3:6:2:2 3:8:1:8"),
+        bassline: B("0:0:R:8 0:10:R:4 0:14:5:2"), groove: { kick: "X..x......x.....", snare: "....X.......X...", hat: "x.x.x.x.x.x.x.xx" } }),
+      Sx("chorus", 8, .9, "F G Am Am", { mel: N("0:0:7:4 0:6:5:2 0:8:7:4 0:12:9:4 1:0:6:6 1:8:8:4 1:12:6:4 2:0:9:4 2:6:7:2 2:8:9:4 2:12:7:4 3:0:9:6 3:6:7:2 3:8:4:8"),
+        bassline: B("0:0:R:3 0:3:R:3 0:8:R:2 0:10:R:2 0:12:8:4"), groove: { kick: "X..x....x.x.....", snare: "....X.......X...", clap: "....x.......x...", hat: "x.x.x.x.x.x.xxxx", open: "......x.......x." } }),
+      Sx("verse", 8, .7, "Am7 Am7 Fmaj7 G", {}),
+      Sx("break", 4, .4, "Fmaj7 G Am7 Am7", { lead: "none", drums: 1 }),
+      Sx("chorus", 8, 1, "F G Am Am", {}),
+      Sx("outro", 4, .35, "Am7 Fmaj7 G Am7", { lead: "sparse", drums: 1 })] };
+
+  EX.trap = { title: "Midnight Drive", key: "C", mode: "minor", bpm: 140, style: "trap", moods: ["anger", "fear", "sadness"],
+    band: { pad: "pad", comp: "keys", lead: "bells", arp: "pluck", bass: "808" }, motif: { on: [0, 3, 6, 8], deg: [4, 2, 0, 2] },
+    sections: [
+      Sx("intro", 4, .4, "Cm Ab Eb Bb", { lead: "none", drums: 0 }),
+      Sx("verse", 8, .65, "Cm Ab Eb Bb", { mel: N("0:0:4:4 0:6:2:2 0:8:0:4 0:12:2:4 1:0:0:6 1:8:2:4 1:12:4:4 2:0:4:4 2:6:2:2 2:8:4:4 2:12:2:4 3:0:6:6 3:8:4:4 3:12:1:4"),
+        bassline: B("0:0:R:7 0:7:R:3 0:10:R:2 0:12:R:2 0:14:a:2"), groove: { kick: "x......x..x.x...", snare: "........x.......", hat: "x.xxx.x.xxx.xx.x" } }),
+      Sx("chorus", 8, .95, "Ab Bb Cm Cm", { mel: N("0:0:7:4 0:6:5:2 0:8:7:4 0:12:9:4 1:0:8:6 1:8:6:4 1:12:8:4 2:0:9:6 2:8:7:4 2:12:9:4 3:0:9:6 3:6:7:2 3:8:4:8"),
+        bassline: B("0:0:R:6 0:8:R:4 0:12:5:4"), groove: { kick: "x.....x.x...x...", snare: "........x.......", clap: "........x.......", hat: "xxxxxxxxxxxxxxxx", open: "......x.......x." } }),
+      Sx("verse", 8, .7, "Cm Ab Eb Bb", {}),
+      Sx("break", 4, .4, "Ab Bb Cm Cm", { lead: "sparse", drums: 1 }),
+      Sx("chorus", 8, 1, "Ab Bb Cm Cm", {}),
+      Sx("outro", 4, .4, "Cm Ab Eb Bb", { lead: "sparse", drums: 1 })] };
+
+  EX.afrobeats = { title: "Lagos Evening", key: "A", mode: "minor", bpm: 102, style: "afrobeats", moods: ["joy", "love", "hope"],
+    band: { pad: "pad", comp: "guitar", lead: "marimba", arp: "none", bass: "ebass" }, motif: { on: [0, 3, 6, 10], deg: [4, 4, 2, 0] },
+    sections: [
+      Sx("intro", 4, .4, "Am G F G", { lead: "none", drums: 1 }),
+      Sx("verse", 8, .6, "Am G F G", { drums: 1, mel: N("0:0:4:3 0:3:2:1 0:6:0:2 0:10:2:2 0:12:0:4 1:0:1:3 1:3:3:1 1:6:1:2 1:10:3:2 1:12:1:4 2:0:5:3 2:3:3:1 2:6:0:2 2:10:3:2 2:12:5:4 3:0:6:3 3:3:4:1 3:6:1:2 3:10:4:2 3:12:6:4"),
+        bassline: B("0:0:R:3 0:3:R:1 0:6:5:2 0:10:R:2 0:14:a:2"), groove: { kick: "x.....x...x.....", rim: "....x.......x...", shaker: "xoxoxoxoxoxoxoxo", hat: "..x...x...x...x." } }),
+      Sx("chorus", 8, .9, "F G Am Am", { mel: N("0:0:7:3 0:3:7:1 0:6:5:2 0:10:3:2 0:12:5:4 1:0:6:3 1:3:8:1 1:6:6:2 1:10:4:2 1:12:6:4 2:0:9:3 2:3:7:1 2:6:9:2 2:10:7:2 2:12:9:4 3:0:7:4 3:6:5:2 3:8:2:8"),
+        bassline: B("0:0:R:3 0:3:R:1 0:6:5:2 0:8:8:2 0:10:R:2 0:14:a:2"), groove: { kick: "x.....x...x...x.", rim: "....x.......x...", clap: "....x.......x...", shaker: "xoxoxoxoxoxoxoxo", hat: "..x...x...x...x.", cHi: "...x.x....x.x..." } }),
+      Sx("verse", 8, .65, "Am G F G", { drums: 1 }),
+      Sx("chorus", 8, .95, "F G Am Am", {}),
+      Sx("break", 4, .4, "Dm G F Em", { lead: "none", drums: 1 }),
+      Sx("chorus", 8, 1, "F G Am Am", {}),
+      Sx("outro", 4, .35, "Am G F Am", { lead: "sparse", drums: 1 })] };
+
+  EX.amapiano = { title: "Sunday Piano", key: "A", mode: "minor", bpm: 112, style: "amapiano", moods: ["joy", "love", "hope"],
+    band: { pad: "pad", comp: "keys", lead: "piano", arp: "none", bass: "log" }, motif: { on: [0, 3, 6, 10], deg: [4, 2, 4, 0] },
+    sections: [
+      Sx("intro", 4, .35, "Am9 Fmaj7 Dm9 E7", { lead: "none", drums: 1 }),
+      Sx("verse", 8, .6, "Am9 Fmaj7 Dm9 E7", { drums: 1, mel: N("0:0:4:3 0:6:2:2 0:8:0:4 0:12:2:4 1:0:5:3 1:6:3:2 1:8:0:4 1:12:5:4 2:0:5:3 2:6:3:2 2:8:1:4 2:12:3:4 3:0:3:3 3:6:1:2 3:8:4:8"),
+        bassline: B("0:0:R:4 0:6:5:2 0:10:R:3 0:14:a:2"), groove: { kick: "x.....x.x.......", rim: "............x...", shaker: "xoxoxoxoxoxoxoxo", hat: "..x...x...x...x." } }),
+      Sx("chorus", 8, .9, "Fmaj7 Am9 Dm9 E7", { mel: N("0:0:7:3 0:6:5:2 0:8:7:4 0:12:9:4 1:0:9:3 1:6:8:2 1:8:7:2 1:10:5:2 1:12:4:4 2:0:7:3 2:6:5:2 2:8:7:4 2:12:5:4 3:0:8:4 3:6:6:2 3:8:4:8"),
+        bassline: B("0:0:R:4 0:6:5:2 0:8:8:3 0:12:R:2 0:14:a:2"), groove: { kick: "x.......x.x.....", rim: "............x...", clap: "....x.......x...", shaker: "xoxoxoxoxoxoxoxo", hat: "..x...x...x...x.", cLo: "..x...x...x..x.." } }),
+      Sx("verse", 8, .65, "Am9 Fmaj7 Dm9 E7", { drums: 1 }),
+      Sx("chorus", 8, .95, "Fmaj7 Am9 Dm9 E7", {}),
+      Sx("break", 4, .4, "Am9 Fmaj7 Dm9 E7", { lead: "sparse", drums: 1 }),
+      Sx("chorus", 8, 1, "Fmaj7 Am9 Dm9 E7", {}),
+      Sx("outro", 4, .3, "Am9 Fmaj7 Dm9 Am9", { lead: "sparse", drums: 1 })] };
+
+  EX.lofi = { title: "Rainy Window", key: "C", mode: "ionian", bpm: 78, style: "lofi", moods: ["calm", "sadness", "neutral"],
+    band: { pad: "pad", comp: "keys", lead: "guitar", arp: "none", bass: "upbass" }, motif: { on: [0, 4, 8, 12], deg: [4, 2, 4, 0] },
+    sections: [
+      Sx("intro", 4, .3, "Cmaj7 Am7 Dm7 G7", { lead: "none", drums: 0 }),
+      Sx("verse", 8, .5, "Cmaj7 Am7 Dm7 G7", { drums: 1, mel: N("0:0:4:6 0:8:2:4 0:12:4:4 1:0:5:6 1:8:2:4 1:12:0:4 2:0:5:6 2:8:3:4 2:12:5:4 3:0:6:4 3:6:4:2 3:8:1:8"),
+        bassline: B("0:0:R:6 0:8:5:6 0:14:a:2"), groove: { kick: "x.....x.......x.", snare: "....x.......x...", hat: "x.x.x.x.x.x.xoxo" } }),
+      Sx("chorus", 8, .7, "Fmaj7 Em7 Dm7 Cmaj7", { mel: N("0:0:5:6 0:8:7:4 0:12:5:4 1:0:4:6 1:8:6:4 1:12:4:4 2:0:5:6 2:8:3:4 2:12:5:4 3:0:4:6 3:8:2:8"),
+        bassline: B("0:0:R:6 0:6:R:4 0:10:5:4 0:14:a:2"), groove: { kick: "x.....x...x.....", snare: "....x.......x...", hat: "x.x.x.x.x.x.xoxo", open: "..............x." } }),
+      Sx("verse", 8, .55, "Cmaj7 Am7 Dm7 G7", { drums: 1 }),
+      Sx("bridge", 4, .35, "Am7 Dm7 G7 Cmaj7", { lead: "sparse", drums: 1 }),
+      Sx("chorus", 8, .8, "Fmaj7 Em7 Dm7 Cmaj7", {}),
+      Sx("outro", 4, .25, "Fmaj7 Em7 Dm7 Cmaj7", { lead: "sparse", drums: 0 })] };
+
+  EX.house = { title: "After Hours", key: "A", mode: "minor", bpm: 124, style: "house", moods: ["joy", "neutral"],
+    band: { pad: "pad", comp: "synth", lead: "pluck", arp: "pluck", bass: "synthbass" }, motif: { on: [0, 3, 6, 10], deg: [4, 2, 0, 2] },
+    sections: [
+      Sx("intro", 8, .4, "Am7 Fmaj7 C G", { lead: "none", drums: 1 }),
+      Sx("build", 4, .75, "Am7 Fmaj7 C G", { lead: "none", drums: 2 }),
+      Sx("drop", 8, 1, "Am7 Fmaj7 C G", { mel: N("0:0:4:3 0:3:4:1 0:6:2:2 0:10:0:2 0:12:2:4 1:0:3:3 1:3:3:1 1:6:5:2 1:10:3:2 1:12:5:4 2:0:2:3 2:3:2:1 2:6:4:2 2:10:2:2 2:12:0:4 3:0:1:3 3:3:1:1 3:6:4:2 3:10:3:2 3:12:6:4"),
+        bassline: B("0:2:R:2 0:6:R:2 0:10:R:2 0:14:R:2"), groove: { kick: "x...x...x...x...", clap: "....x.......x...", hat: "xxxxxxxxxxxxxxxx", open: "..x...x...x...x." } }),
+      Sx("break", 8, .4, "Am7 Fmaj7 C G", { lead: "sparse", drums: 0 }),
+      Sx("build", 4, .8, "Am7 Fmaj7 C G", { lead: "none", drums: 2 }),
+      Sx("drop", 8, 1, "Am7 Fmaj7 C G", {}),
+      Sx("outro", 8, .4, "Am7 Fmaj7 C G", { lead: "none", drums: 1 })] };
+
+  EX.rnb = { title: "Slow Dance Late", key: "C", mode: "ionian", bpm: 72, style: "rnb", moods: ["love", "sadness"],
+    band: { pad: "strings", comp: "keys", lead: "sax", arp: "none", bass: "ebass" }, motif: { on: [0, 4, 8, 12], deg: [4, 2, 4, 5] },
+    sections: [
+      Sx("intro", 4, .3, "Cmaj9 Am9 Dm9 G13", { lead: "none", drums: 0 }),
+      Sx("verse", 8, .5, "Cmaj9 Am9 Dm9 G13", { drums: 1, mel: N("0:0:4:6 0:8:2:4 0:12:4:4 1:0:5:6 1:8:4:4 1:12:2:4 2:0:5:6 2:8:3:4 2:12:5:4 3:0:4:6 3:8:6:8"),
+        bassline: B("0:0:R:6 0:8:5:4 0:12:a:4"), groove: { kick: "x.......x.x.....", snare: "....x.......x...", hat: "x.x.x.x.x.x.xoxo" } }),
+      Sx("chorus", 8, .8, "Fmaj9 Em9 Dm9 G13", { mel: N("0:0:7:6 0:8:5:4 0:12:7:4 1:0:6:6 1:8:4:4 1:12:6:4 2:0:5:6 2:8:7:4 2:12:5:4 3:0:6:4 3:8:4:8"),
+        bassline: B("0:0:R:6 0:6:R:4 0:10:5:2 0:12:a:4"), groove: { kick: "x.....x...x.....", snare: "....x.......x...", clap: "....x.......x...", hat: "x.x.x.x.x.x.xoxo", open: "..............x." } }),
+      Sx("bridge", 4, .4, "Am9 Dm9 G13 Cmaj9", { lead: "sparse", drums: 1 }),
+      Sx("chorus", 8, .85, "Fmaj9 Em9 Dm9 G13", {}),
+      Sx("outro", 4, .3, "Fmaj9 Em9 Dm9 Cmaj9", { lead: "sparse", drums: 0 })] };
+
+  EX.ambient = { title: "Slow Light", key: "D", mode: "lydian", bpm: 60, style: "ambient", moods: ["calm", "hope", "neutral"],
+    band: { pad: "pad", comp: "strings", lead: "bells", arp: "none", bass: "sub" }, motif: { on: [0, 8], deg: [4, 2] },
+    sections: [
+      Sx("intro", 8, .2, "Dmaj7 Bm7 Gmaj7 A", { lead: "none", drums: 0 }),
+      Sx("verse", 8, .35, "Dmaj7 Bm7 Gmaj7 A", { drums: 0, lead: "sparse", mel: N("0:0:4:8 0:8:2:8 1:0:5:8 1:8:4:8 2:0:6:8 2:8:4:8 3:0:6:12"), bass: false }),
+      Sx("chorus", 8, .55, "Gmaj7 A Bm7 Dmaj7", { drums: 0, mel: N("0:0:7:8 0:8:5:8 1:0:6:8 1:8:4:8 2:0:7:8 2:8:9:8 3:0:7:12"), bass: false }),
+      Sx("break", 8, .25, "Dmaj7 Bm7 Gmaj7 A", { lead: "none", drums: 0 }),
+      Sx("outro", 8, .2, "Dmaj7 Bm7 Gmaj7 Dmaj7", { lead: "sparse", drums: 0 })] };
+
+  EX.cinematic = { title: "The Long Way Back", key: "D", mode: "minor", bpm: 80, style: "cinematic", moods: ["sadness", "fear", "hope"],
+    band: { pad: "strings", comp: "piano", lead: "violin", arp: "none", bass: "sub" }, motif: { on: [0, 6, 8], deg: [4, 2, 0] },
+    sections: [
+      Sx("intro", 8, .25, "Dm Bb F C", { lead: "none", drums: 0 }),
+      Sx("verse", 8, .4, "Dm Bb F C", { drums: 0, mel: N("0:0:4:8 0:8:2:8 1:0:3:8 1:8:5:8 2:0:2:8 2:8:4:8 3:0:6:12"), bass: false }),
+      Sx("build", 8, .7, "Bb F C Dm", { lead: "none", drums: 1 }),
+      Sx("chorus", 8, 1, "Bb F Gm A", { drums: 2, mel: N("0:0:7:6 0:8:9:4 0:12:7:4 1:0:9:6 1:8:11:4 1:12:9:4 2:0:7:6 2:8:5:4 2:12:7:4 3:0:11:6 3:8:8:8"),
+        bassline: B("0:0:R:8 0:8:R:4 0:12:R:4"), groove: { kick: "x.......x.......", snare: "........x.......", tom: "..............x.", hat: "x.x.x.x.x.x.x.x." } }),
+      Sx("bridge", 4, .35, "Gm Dm Bb A", { lead: "sparse", drums: 0 }),
+      Sx("chorus", 8, 1, "Bb F Gm A", { drums: 2 }),
+      Sx("outro", 8, .2, "Dm Bb F Dm", { lead: "sparse", drums: 0 })] };
+
+  EX.acoustic = { title: "Porch Light", key: "G", mode: "ionian", bpm: 92, style: "acoustic", moods: ["love", "hope", "calm", "joy"],
+    band: { pad: "none", comp: "guitar", lead: "violin", arp: "none", bass: "upbass" }, motif: { on: [0, 4, 6, 8], deg: [4, 2, 4, 5] },
+    sections: [
+      Sx("intro", 4, .35, "G D Em C", { lead: "none", drums: 0 }),
+      Sx("verse", 8, .5, "G D Em C", { drums: 1, mel: N("0:0:4:4 0:4:2:2 0:6:4:2 0:8:2:4 0:12:0:4 1:0:5:4 1:4:4:2 1:6:5:2 1:8:1:4 1:12:-1:4 2:0:2:4 2:4:4:2 2:6:2:2 2:8:0:4 2:12:2:4 3:0:5:4 3:4:3:2 3:6:0:2 3:8:5:8"),
+        bassline: B("0:0:R:6 0:8:5:6 0:14:a:2"), groove: { kick: "x.......x.......", rim: "....x.......x...", shaker: "x.x.x.x.x.x.x.x." } }),
+      Sx("chorus", 8, .8, "C G D Em", { mel: N("0:0:7:4 0:4:7:2 0:6:9:2 0:8:7:4 0:12:4:4 1:0:6:4 1:4:6:2 1:6:8:2 1:8:6:4 1:12:4:4 2:0:8:4 2:4:8:2 2:6:7:2 2:8:5:4 2:12:3:4 3:0:6:6 3:6:4:2 3:8:2:8"),
+        bassline: B("0:0:R:4 0:4:R:2 0:8:5:4 0:12:R:2 0:14:a:2"), groove: { kick: "x.....x.x.......", rim: "....x.......x...", shaker: "x.x.x.x.x.x.x.x.", tamb: "..x...x...x...x." } }),
+      Sx("verse", 8, .55, "G D Em C", { drums: 1 }),
+      Sx("chorus", 8, .85, "C G D Em", {}),
+      Sx("bridge", 4, .4, "Em C G D", { lead: "sparse", drums: 0 }),
+      Sx("chorus", 8, .9, "C G D Em", {}),
+      Sx("outro", 4, .3, "C G D G", { lead: "sparse", drums: 0 })] };
+
+  /* Finishing pass: every exemplar gets a mix sheet and an orchestra that changes with the form
+     (a melody double lifts each chorus, bridges and breaks change colour). [style: double instrument, octave, bridge band] */
+  var FIN = {
+    pop: ["bells", 12, { lead: "flute" }], rock: ["hammond", 0, { lead: "eguitar" }], rocknroll: ["sax", 0, { lead: "piano" }], blues: ["sax", 0, { lead: "hammond" }],
+    jazz: ["flute", 12, { lead: "keys" }], reggae: ["flute", 12, { lead: "keys" }], funk: ["brass", 0, { lead: "synth" }], hiphop: ["pluck", 0, { lead: "keys" }],
+    trap: ["synth", 12, { lead: "pluck" }], afrobeats: ["kalimba", 12, { lead: "flute" }], amapiano: ["bells", 12, { lead: "flute" }], lofi: ["kalimba", 12, { lead: "flute" }],
+    house: ["synth", 12, { lead: "bells" }], rnb: ["ooh", 0, { lead: "violin" }], ambient: ["harp", 12, { lead: "flute" }], cinematic: ["bells", 12, { lead: "flute" }], acoustic: ["flute", 0, { lead: "kalimba" }] };
+  var FMIX = { hiphop: { drums: 1.05, bass: 1.15 }, trap: { drums: 1.0, bass: 1.2 }, house: { drums: 1.1, bass: 1.1 }, ambient: { pad: 1.05, lead: .9 }, cinematic: { pad: 1.05, lead: 1.0 }, lofi: { drums: .9 }, rnb: { drums: .9, lead: 1.05 } };
+  Object.keys(EX).forEach(function (k) {
+    var ex = EX[k], f = FIN[k], m = FMIX[k] || {};
+    ex.sections.forEach(function (sx, i) {
+      if ((sx.kind === "chorus" || sx.kind === "drop") && sx.lead !== "none") sx.double = { inst: f[0], oct: f[1] };
+      if (/bridge|break/.test(sx.kind) && sx.lead !== "none") sx.band = f[2];
+      if (sx.kind === "intro") { var nb = {}; if (ex.band.arp !== "none") nb.arp = "none"; if (ex.band.comp !== "none") nb.comp = "none"; if (k !== "ambient" && k !== "cinematic") sx.band = nb; }
+    });
+    ex.mix = { lead: { lvl: m.lead || 1.1, rv: 1.0 }, pad: { lvl: m.pad || .9, rv: 1.2 }, bass: { lvl: m.bass || 1.05 }, drums: { lvl: m.drums || .95 } };
+  });
+
+  var MOOD_EX = { joy: "pop", hope: "acoustic", love: "rnb", sadness: "cinematic", calm: "lofi", anger: "rock", fear: "cinematic", neutral: "lofi", excited: "afrobeats" };
+  function exemplar(style, mood, opt) {
+    opt = opt || {}; var k = String(style || "").toLowerCase().replace(/[^a-z]/g, ""); if (k === "rockandroll") k = "rocknroll";
+    if (!EX[k]) { k = null; var m = String(mood || "").toLowerCase(); if (opt.alt) { for (var q in EX) if (EX[q].moods.indexOf(m) >= 0 && q !== opt.alt) { k = q; break; } } if (!k) k = MOOD_EX[m] || "pop"; }
+    var o = JSON.parse(JSON.stringify(EX[k])); o.style = k;
+    if (opt.trim) { o.sections.forEach(function (x) { delete x.mel; delete x.bassline; delete x.groove; delete x.groove2; }); }
+    return o;
+  }
+  function exemplarCheck() { var out = {}; Object.keys(EX).forEach(function (k) { var r = critique(EX[k]); out[k] = r.score; }); return out; }
+
   var API = {
     version: 1, supported: function () { return !!AC; },
     unlock: unlock, play: play, next: next, pause: pause, resume: resume, toggle: toggle, stop: stop, sleep: sleep,
@@ -2747,7 +3041,8 @@
     like: like, saved: saved, playSaved: playSaved, tasteSummary: tasteSummary, info: info, level: level,
     on: function (fn) { P.listeners.push(fn); return function () { API.off(fn); }; }, off: function (fn) { P.listeners = P.listeners.filter(function (x) { return x !== fn; }); },
     voices: { set: function (o) { o = o || {}; if (o.amount !== undefined) VOX.amt = clamp(Number(o.amount) || 0, 0, 2); if (o.level !== undefined) VOX.lvl = clamp(Number(o.level) || 1, .3, 3); try { global.localStorage.setItem("echo_vox_v1", JSON.stringify(VOX)); } catch (e) {} return { amount: VOX.amt, level: VOX.lvl }; }, get: function () { return { amount: VOX.amt, level: VOX.lvl }; } },
-    critique: critique, setMelodies: setMelodies, setBass: setBass, setDrums: setDrums, setOrchestra: setOrchestra, likedExamples: likedExamples, tasteProfile: tasteProfile, tonesOf: tonesOf, parseBrief: parseBrief, moods: MOOD_LIST.slice(), styles: STYLE_LIST.map(function (k) { return { id: k, name: STYLES[k].name }; }),
+    ranges: function () { var o = {}; Object.keys(INSTR_RANGE).forEach(function (k) { o[k] = noteName(INSTR_RANGE[k][0]) + "-" + noteName(INSTR_RANGE[k][1]) + (LEAD_CENTER[k] ? " lead~" + noteName(LEAD_CENTER[k]) : "") + (COMP_CENTER[k] ? " chords~" + noteName(COMP_CENTER[k]) : ""); }); return o; },
+    critique: critique, exemplar: exemplar, exemplarCheck: exemplarCheck, setMelodies: setMelodies, setBass: setBass, setDrums: setDrums, setOrchestra: setOrchestra, likedExamples: likedExamples, tasteProfile: tasteProfile, tonesOf: tonesOf, parseBrief: parseBrief, moods: MOOD_LIST.slice(), styles: STYLE_LIST.map(function (k) { return { id: k, name: STYLES[k].name }; }),
     samples: { setBase: function (u) { SMP.base = u; }, memory: function () { return { mb: +(smpBytes() / 1048576).toFixed(1), budgetMB: +(smpBudget() / 1048576).toFixed(0), banks: Object.keys(SMP.banks).filter(function (k) { return SMP.banks[k].ready; }).length }; }, setBudgetMB: function (n) { SMP.budgetMB = n; }, enable: function (on) { SMP.on = !!on; }, enabled: function () { return SMP.on; }, status: function () { var o = {}; for (var k in SMP.banks) o[k] = SMP.banks[k].ready ? "ready" : SMP.banks[k].failed ? "failed" : "loading"; return o; }, preload: function (names) { var c = ensureCtx(); if (c) (names || Object.keys(SMAP).map(function (k) { return SMAP[k].bank; }).concat(["drums-acoustic", "drums-lm2"])).forEach(function (b) { smpGet(b, c); }); } },
     mix: mix, mixNext: mixNext, mixInfo: mixInfo, buildMixPlan: buildMixPlan, renderMix: renderMix,
     render: render, toWav: toWav, exportWav: exportWav, exportMixWav: exportMixWav,

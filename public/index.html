@@ -972,7 +972,7 @@ function loadEchoMusic(){
   if(_musicPromise) return _musicPromise;
   _musicPromise=new Promise((res,rej)=>{
     const el=document.createElement("script");
-    el.src="/echo-music.js?v=23"; el.async=true;
+    el.src="/echo-music.js?v=24"; el.async=true;
     el.onload=()=>{ if(window.EchoMusic){ window.dispatchEvent(new Event("echomusic-ready")); res(window.EchoMusic); } else rej(new Error("music engine missing")); };
     el.onerror=()=>rej(new Error("could not load the music engine"));
     document.head.appendChild(el);
@@ -1090,7 +1090,7 @@ async function fetchMusicPlan(ask,mood,style){
   try{
     const ctl=new AbortController(), to=setTimeout(()=>ctl.abort(),9500);
     const res=await fetch("/.netlify/functions/chat",{method:"POST",headers:{"Content-Type":"application/json"},signal:ctl.signal,
-      body:JSON.stringify({system:PLAN_SYSTEM+TASTE_NOTE,messages:[{role:"user",content:JSON.stringify({request:String(ask||"").slice(0,300)||"surprise me with something that fits the mood",mood:mood||"neutral",preferredStyle:style||"your choice",variation:Math.floor(Math.random()*1e6),...tasteFor("plan",2)})}]})});
+      body:JSON.stringify({system:PLAN_SYSTEM+TASTE_NOTE+EX_NOTE,messages:[{role:"user",content:JSON.stringify({request:String(ask||"").slice(0,300)||"surprise me with something that fits the mood",mood:mood||"neutral",preferredStyle:style||"your choice",variation:Math.floor(Math.random()*1e6),...exFor("plan",style,mood),...tasteFor("plan",2)})}]})});
     clearTimeout(to); if(!res.ok) return null;
     const d=await res.json(), t=String(d.text||""), a=t.indexOf("{"), z=t.lastIndexOf("}"); if(a<0||z<a) return null;
     const plan=JSON.parse(t.slice(a,z+1)); return plan&&Array.isArray(plan.sections)&&plan.sections.length>=2?plan:null;
@@ -1145,8 +1145,8 @@ function withMel(plan,map){ const c=JSON.parse(JSON.stringify(plan)); for(const 
 async function fetchMelodies(an,targets,extra){
   const payload={key:an.key,mode:an.mode,scaleLength:an.scale,sections:targets.map(s=>({index:s.src,kind:s.kind,bars:Math.min(s.bars,4),
     tones:s.chords.slice(0,4)})),...(extra||{})};
-  Object.assign(payload,tasteFor("mel",2),extra||{});
-  const r=await aiJson(MELODY_SYSTEM+TASTE_NOTE,payload,12000,2200);
+  Object.assign(payload,exFor("mel"),tasteFor("mel",2),extra||{});
+  const r=await aiJson(MELODY_SYSTEM+TASTE_NOTE+EX_NOTE+CHANGE_NOTE,payload,12000,2200);
   return r&&r.mel&&typeof r.mel==="object"?r.mel:null;
 }
 const BASS_SYSTEM=`You are a great session bassist writing the BASS LINE for sections of a piece whose chords are fixed. Return ONE JSON object and nothing else: {"bass":{"<sectionIndex>":[[bar,step,tone,length],...]}}.
@@ -1157,9 +1157,9 @@ Play like a pro for the genre:
 - 3 to 12 notes per bar, never busy. Vary lengths (long and short).
 If the message contains "critic" notes and a "previous" line, rewrite it to fix exactly those problems and keep what works. Never explain.`;
 async function fetchBass(plan,targets,extra){
-  const payload={style:plan.style||"",bpm:plan.bpm||0,bass:(plan.band&&plan.band.bass)||"",sections:targets.map(t=>({index:t.index,kind:t.kind,energy:t.energy,chords:t.chords})),...(extra||{})};
-  Object.assign(payload,tasteFor("bass",2));
-  const r=await aiJson(BASS_SYSTEM+TASTE_NOTE,payload,12000,1200);
+  const payload={style:plan.style||"",bpm:plan.bpm||0,bass:(plan.band&&plan.band.bass)||"",sections:targets.map(t=>({index:t.index,kind:t.kind,energy:t.energy,chords:t.chords}))};
+  Object.assign(payload,exFor("bass"),tasteFor("bass",2),extra||{});
+  const r=await aiJson(BASS_SYSTEM+TASTE_NOTE+EX_NOTE+CHANGE_NOTE+LOCK_NOTE,payload,12000,1400);
   return r&&r.bass&&typeof r.bass==="object"?r.bass:null;
 }
 function bassTargets(plan){
@@ -1170,6 +1170,30 @@ function bassTargets(plan){
   return out;
 }
 function withBass(plan,map){ const c=JSON.parse(JSON.stringify(plan)); for(const k in map){ const sx=c.sections&&c.sections[k]; if(sx) sx.bassline=map[k]; } return c; }
+const EX_NOTE=`
+
+MASTER EXAMPLE: the message may contain "goodExample" (a whole plan) or "exampleOf" (a verse and chorus part): a hand-written piece by a master of this genre, shown only to teach craft and feel (form, harmonic rhythm, hook shape, phrasing, groove). Write something NEW in the same spirit. Never copy its chords or notes, and let the request and the listener decide the genre.`;
+const CHANGE_NOTE=`
+
+If the message contains "change" (what the listener just asked for) and "previous" (the part that is playing), return the SAME kind of answer with ONLY that change applied to the previous part. Keep everything else: the rhythm, the shape and the notes that already work.`;
+const LOCK_NOTE=`
+
+LOCKED TO THE KICK: if the message has "kick" (the drummer's kick pattern per section index: 16 characters, x = hit), the bass must lock with it: put a bass note on every kick hit (the first on step 0 or the first kick), then add notes between the kicks. Exception: house/EDM, where the bass plays the gaps between the kicks.`;
+const RANGE_NOTE=`
+
+RANGE AND FREQUENCY: "ranges" lists each instrument's comfortable range (note names, middle C = C4), its usual lead pitch (lead~) and chord register (chords~). Keep the melody inside the lead instrument's range. The lead and the chord instrument must not live in the same register: if they would, pick a brighter lead, or double the melody an octave up. When the pad, the chord instrument and a double all sit in the low-mids (C3-E4) the song gets muddy: move the double up (oct 12), drop a layer, or clean the pad with "hp". The mix sheet also accepts "tone" (dB from -6 to 6, positive = brighter) and "hp" (a high-pass multiplier from 0.5 to 3; above 1 removes mud; never above 1 on bass). Example: "pad":{"lvl":0.8,"hp":2,"tone":-2}.`;
+function exFor(part,style,mood){
+  try{
+    const M=window.EchoMusic; if(!M||!M.exemplar) return {};
+    const ctx=window.__mctx||{}, st=style||ctx.style||"", md=mood||ctx.mood||"neutral";
+    const ex=M.exemplar(st,md,part==="plan"?{trim:true}:{}); if(!ex) return {};
+    if(part==="plan") return {goodExample:ex};
+    const f=part==="mel"?"mel":part==="bass"?"bassline":"groove", find=ks=>ex.sections.find(x=>ks.includes(x.kind)&&x[f]);
+    const v=find(["verse","head"]), c=find(["chorus","drop"]), o={style:ex.style,title:ex.title,bpm:ex.bpm,verse:v&&v[f],chorus:c&&c[f]};
+    if(part==="bass"){ o.verseKick=v&&v.groove&&v.groove.kick; o.chorusKick=c&&c.groove&&c.groove.kick; }
+    return {exampleOf:o};
+  }catch(e){ return {}; }
+}
 const TASTE_NOTE=`
 
 LISTENER TASTE: the message may contain "listenerTaste" and "likedExamples": pieces this listener saved because they loved them. Treat them as evidence of what they enjoy (tempo range, major or minor lean, harmonic richness, favourite instruments, rhythmic feel, melodic shape). Write something NEW in the same spirit; never copy an example note for note, and if the request names a genre, stay true to that genre first.`;
@@ -1190,8 +1214,8 @@ Play like a pro for the genre:
 Rules: always give a backbeat (snare, clap or rim on 4 and 12, or on 8 for half-time/one-drop), keep a pulse (hat/ride/shaker/tamb), never put kick and snare together on the backbeat, keep it under about 45 hits per bar. Make the chorus groove bigger or busier than the verse groove (open hats, more kicks, clap layered with snare).
 If the message contains "critic" notes and a "previous" groove, rewrite it to fix exactly those problems and keep what works. Never explain.`+TASTE_NOTE;
 async function fetchDrums(plan,targets,extra){
-  const payload={style:plan.style||"",bpm:plan.bpm||0,sections:targets,...tasteFor("drums",2),...(extra||{})};
-  const r=await aiJson(DRUM_SYSTEM,payload,12000,1500);
+  const payload={style:plan.style||"",bpm:plan.bpm||0,sections:targets,...exFor("drums"),...tasteFor("drums",2),...(extra||{})};
+  const r=await aiJson(DRUM_SYSTEM+EX_NOTE+CHANGE_NOTE,payload,12000,1500);
   return r&&r.drums&&typeof r.drums==="object"?r.drums:null;
 }
 function drumTargets(plan){
@@ -1214,8 +1238,8 @@ MIX: for each part give lvl (level, 1.0 = default, range 0.4-1.7), rv (reverb am
 If the message contains "critic" notes and a "previous" arrangement, rewrite it to fix exactly those problems and keep what works. Never explain.`+TASTE_NOTE;
 async function fetchOrchestra(plan,extra){
   const payload={style:plan.style||"",bpm:plan.bpm||0,key:plan.key||"",mode:plan.mode||"",title:plan.title||"",band:plan.band||{},
-    sections:(plan.sections||[]).map((x,i)=>({index:i,kind:x&&x.kind,energy:x&&x.energy,lead:x&&x.lead,drums:x&&x.drums})),...tasteFor("orch",2),...(extra||{})};
-  const r=await aiJson(ORCH_SYSTEM,payload,12000,1800);
+    sections:(plan.sections||[]).map((x,i)=>({index:i,kind:x&&x.kind,energy:x&&x.energy,lead:x&&x.lead,drums:x&&x.drums})),ranges:(window.EchoMusic&&window.EchoMusic.ranges&&window.EchoMusic.ranges())||{},...tasteFor("orch",2),...(extra||{})};
+  const r=await aiJson(ORCH_SYSTEM+RANGE_NOTE+CHANGE_NOTE,payload,12000,1900);
   return r&&r.orchestra&&typeof r.orchestra==="object"?r.orchestra:null;
 }
 function withOrch(plan,o){
@@ -1223,8 +1247,15 @@ function withOrch(plan,o){
   for(const k in ss){ const sx=c.sections&&c.sections[k]; if(!sx) continue; if(ss[k].band) sx.band=ss[k].band; if(ss[k].double) sx.double=ss[k].double; }
   if(o&&o.mix) c.mix=o.mix; return c;
 }
+function kickFor(plan,map,idx){
+  if(!map) return null; const gr=m=>m&&(m.groove||m); const sx=plan.sections&&plan.sections[idx]; let m=map[idx];
+  if(!m&&sx){ for(const j in map){ const o=plan.sections[j]; if(o&&o.kind===sx.kind){ m=map[j]; break; } } }
+  const g=gr(m); return g&&typeof g.kick==="string"?g.kick:null;
+}
+function kicksFor(plan,map,targets){ const o={}; (targets||[]).forEach(t=>{ const k=kickFor(plan,map,t.index); if(k) o[t.index]=k; }); return Object.keys(o).length?{kick:o}:{}; }
 // Background: the piece starts at once with the engine's own hook and bass; the written parts land from the next section on.
-async function polishMelody(plan){
+async function polishMelody(plan,opt){
+  opt=opt||{}; const keep=!!opt.keep;
   const M=window.EchoMusic; if(!M||!M.critique||!plan||typeof plan!=="object") return;
   /* quota care: the extra writers are optional, so they stand down while the AI is rate limited, and the listener can choose how many to run
      (console: localStorage.setItem('yoecho_composer','0'|'1'|'2'): 0 = chord plan only, 1 = melody + bass, 2 = everything) */
@@ -1232,11 +1263,13 @@ async function polishMelody(plan){
   let level=2; try{ const v=localStorage.getItem('yoecho_composer'); if(v==='0'||v==='1'||v==='2') level=Number(v); }catch(e){}
   if(level===0) return;
   const stillOn=()=>{ const cur=M.current&&M.current(); return !!cur&&(cur.planSrc===plan||cur.plan===plan); };
+  { const cu=M.current&&M.current(); window.__mctx={style:plan.style||(cu&&cu.style)||"",mood:(cu&&cu.mood)||"neutral"}; }
+  let drumP=Promise.resolve(null);
   const melPass=async()=>{
     try{
       if(!M.tonesOf||!M.setMelodies) return;
-      const base=stripMel(plan), an=M.tonesOf(base); if(!an) return;
-      const targets=melTargets(an); if(!targets.length) return;
+      const base=keep?JSON.parse(JSON.stringify(plan)):stripMel(plan), an=M.tonesOf(base); if(!an) return;
+      const targets=melTargets(an).filter(t=>!keep||!(base.sections[t.src]&&base.sections[t.src].mel)); if(!targets.length) return;
       let best=await fetchMelodies(an,targets); if(!best) return;
       let res=M.critique(withMel(base,best)).mel;
       if(level>=2&&res.score<80&&res.issues.length){
@@ -1250,12 +1283,16 @@ async function polishMelody(plan){
   const bassPass=async()=>{
     try{
       if(!M.setBass) return;
-      const base=JSON.parse(JSON.stringify(plan)); (base.sections||[]).forEach(x=>{ if(x&&typeof x==="object") delete x.bassline; });
-      const targets=bassTargets(base); if(!targets.length) return;
-      let best=await fetchBass(base,targets); if(!best) return;
+      let base=JSON.parse(JSON.stringify(plan)); if(!keep) (base.sections||[]).forEach(x=>{ if(x&&typeof x==="object") delete x.bassline; });
+      const targets=bassTargets(base).filter(t=>!keep||!base.sections[t.index].bassline); if(!targets.length) return;
+      /* bass and drums are written as a pair: the drummer goes first and the bassist plays to his kick */
+      const dm=await Promise.race([drumP,new Promise(r=>setTimeout(()=>r(null),16000))]);
+      if(dm) base=withDrums(base,dm);
+      const lock=kicksFor(base,dm,targets);
+      let best=await fetchBass(base,targets,lock); if(!best) return;
       let res=M.critique(withBass(base,best)).bass;
       if(level>=2&&res.issues.length){
-        const again=await fetchBass(base,targets,{critic:res.issues,previous:best});
+        const again=await fetchBass(base,targets,{critic:res.issues,previous:best,...lock});
         if(again){ const r2=M.critique(withBass(base,again)).bass; if(r2.score>res.score){ best=again; res=r2; } }
       }
       if(res.score<50||!stillOn()) return;
@@ -1264,21 +1301,23 @@ async function polishMelody(plan){
   };
   const drumPass=async()=>{
     try{
-      if(!M.setDrums) return;
-      const base=stripMel(plan), targets=drumTargets(base); if(!targets.length) return;
-      let best=await fetchDrums(base,targets); if(!best) return;
+      if(!M.setDrums) return null;
+      const base=keep?JSON.parse(JSON.stringify(plan)):stripMel(plan), targets=drumTargets(base).filter(t=>!keep||!base.sections[t.index].groove); if(!targets.length) return null;
+      let best=await fetchDrums(base,targets); if(!best) return null;
       let res=M.critique(withDrums(base,best)).drums;
       if(res.issues.length){
         const again=await fetchDrums(base,targets,{critic:res.issues,previous:best});
         if(again){ const r2=M.critique(withDrums(base,again)).drums; if(r2.score>res.score){ best=again; res=r2; } }
       }
-      if(res.score<50||!stillOn()) return;
-      M.setDrums(best); window.__lastDrumScore=res.score;
-    }catch(e){}
+      if(res.score<50||!stillOn()) return null;
+      M.setDrums(best); window.__lastDrumScore=res.score; return best;
+    }catch(e){ return null; }
   };
+  if(level>=2) drumP=drumPass();
   const orchPass=async()=>{
     try{
       if(!M.setOrchestra) return;
+      if(keep&&plan.mix) return;
       const base=stripMel(plan); if(plan.band) base.band=JSON.parse(JSON.stringify(plan.band)); if(plan.mix===undefined) delete base.mix;
       let best=await fetchOrchestra(base); if(!best) return;
       let res=M.critique(withOrch(base,best)).orch;
@@ -1290,7 +1329,79 @@ async function polishMelody(plan){
       M.setOrchestra(best); window.__lastOrchScore=res.score;
     }catch(e){}
   };
-  await Promise.all(level>=2?[melPass(),bassPass(),drumPass(),orchPass()]:[melPass(),bassPass()]);
+  await Promise.all(level>=2?[melPass(),bassPass(),drumP,orchPass()]:[melPass(),bassPass()]);
+}
+// ── SURGICAL REVISIONS: a request about one part rewrites only that part (and re-locks the bass when the drums change); everything else keeps playing ──
+function classifyRevise(ask){
+  const a=" "+String(ask||"").toLowerCase()+" ", has=r=>r.test(a);
+  if(has(/\b(add|insert|include|put in)\b.*\b(solo|section|bridge|verse|chorus|intro|outro|breakdown|drop)\b/)) return {part:null};
+  if(has(/\b(key|tempo|bpm|faster|slower|speed|chords?|progression|genre|style|mood|sadder|happier|structure|longer|shorter|different song|another song|new song|from scratch|completely|totally)\b/)) return {part:null};
+  let part=null;
+  if(has(/\b(loud|louder|quiet|quieter|soft|softer|too much|reverb|echo|delay|mix|balance|muddy|mud|bright(er)?|dark(er)?|boomy|thin|tinny|harsh|volume|buried|drowned|wider|narrower|clearer|clarity|punch(y|ier)?)\b/)) part="mix";
+  else if(has(/\b(melody|melodies|tune|hook|top line|lead line|riff|solo)\b/)) part="mel";
+  else if(has(/\bbass(line)?\b|\blow end\b/)) part="bass";
+  else if(has(/\b(drums?|beat|groove|rhythm|kick|snare|hi-?hats?|hats|percussion|clap)\b/)) part="drums";
+  else if(has(/\b(instruments?|piano|guitar|strings|violin|flute|sax|synth|choir|voices?|ooh|vox|brass|horns|organ|keys|bells|pad|add|replace|swap|fuller|sparser|layers|arrangement|orchestra)\b/)) part="arr";
+  if(!part) return {part:null};
+  const kinds=[]; const k=(r,...v)=>{ if(has(r)) kinds.push(...v); };
+  k(/\b(chorus|refrain)\b/,"chorus","drop"); k(/\bverses?\b/,"verse","head"); k(/\b(bridge|middle eight|middle 8)\b/,"bridge","solo","break"); k(/\bsolo\b/,"solo"); k(/\bdrop\b/,"drop"); k(/\bintro\b/,"intro"); k(/\b(outro|ending)\b/,"outro");
+  return {part,kinds:kinds.length?kinds:null};
+}
+function carryParts(old,np){
+  try{
+    if(!old||!np||String(old.key||"")!==String(np.key||"")||String(old.mode||"")!==String(np.mode||"")) return 0;
+    const sameBand=JSON.stringify(old.band||{})===JSON.stringify(np.band||{}), sig=x=>String(x.kind)+"|"+(x.chords||[]).join(","), pool={}; let n=0;
+    (old.sections||[]).forEach(x=>{ if(x&&Array.isArray(x.chords)&&!pool[sig(x)]) pool[sig(x)]=x; });
+    (np.sections||[]).forEach(x=>{ const o=x&&Array.isArray(x.chords)&&pool[sig(x)]; if(!o) return;
+      ["mel","bassline","groove","groove2"].forEach(k=>{ if(o[k]&&!x[k]){ x[k]=o[k]; n++; } });
+      if(sameBand){ if(o.band&&!x.band) x.band=o.band; if(o.double&&!x.double) x.double=o.double; } });
+    if(sameBand&&old.mix&&!np.mix) np.mix=old.mix;
+    return n;
+  }catch(e){ return 0; }
+}
+async function surgicalRevise(M,cur,ask,cls){
+  try{
+    const src=cur&&cur.planSrc; if(!src||!Array.isArray(src.sections)||!M.tonesOf) return null;
+    const base=JSON.parse(JSON.stringify(src)); window.__mctx={style:base.style||cur.style||"",mood:cur.mood||"neutral"};
+    const stillOn=()=>{ const c=M.current&&M.current(); return !!c&&c.planSrc===src; };
+    const pick=(list,idx)=>{ const f=cls.kinds?list.filter(t=>cls.kinds.includes(t.kind)):list; return f.length?f:list; };
+    const tag=(cls.kinds?cls.kinds[0].toUpperCase()+" ":"")+({mel:"MELODY",bass:"BASS",drums:"DRUMS",mix:"MIX",arr:"ARRANGEMENT"})[cls.part];
+    const prevOf=(targets,f,key)=>{ const o={}; targets.forEach(t=>{ const i=t[key]; const m=base.sections[i]&&base.sections[i][f]; if(m) o[i]=m; }); return o; };
+    const kickMap=()=>{ const o={}; base.sections.forEach((x,i)=>{ if(x&&x.groove&&x.groove.kick) o[i]={groove:x.groove}; }); return o; };
+    if(cls.part==="mel"){
+      const an=M.tonesOf(base); if(!an) return null; const targets=pick(melTargets(an)); if(!targets.length) return null;
+      let best=await fetchMelodies(an,targets,{change:ask,previous:prevOf(targets,"mel","src")}); if(!best) return null;
+      let res=M.critique(withMel(base,best)).mel;
+      if(res.issues.length&&res.score<85){ const again=await fetchMelodies(an,targets,{change:ask,previous:best,critic:res.issues}); if(again){ const r2=M.critique(withMel(base,again)).mel; if(r2.score>res.score){ best=again; res=r2; } } }
+      if(res.score<45||!stillOn()) return null; M.setMelodies(best,true); return {chip:"REWORKED · "+tag};
+    }
+    if(cls.part==="bass"){
+      const targets=pick(bassTargets(base)); if(!targets.length) return null; const km=kickMap(), lock=kicksFor(base,km,targets);
+      let best=await fetchBass(base,targets,{change:ask,previous:prevOf(targets,"bassline","index"),...lock}); if(!best) return null;
+      let res=M.critique(withBass(base,best)).bass;
+      if(res.issues.length&&res.score<90){ const again=await fetchBass(base,targets,{change:ask,previous:best,critic:res.issues,...lock}); if(again){ const r2=M.critique(withBass(base,again)).bass; if(r2.score>res.score){ best=again; res=r2; } } }
+      if(res.score<50||!stillOn()) return null; M.setBass(best,true); return {chip:"REWORKED · "+tag};
+    }
+    if(cls.part==="drums"){
+      const targets=pick(drumTargets(base)); if(!targets.length) return null;
+      let best=await fetchDrums(base,targets,{change:ask,previous:prevOf(targets,"groove","index")}); if(!best) return null;
+      let res=M.critique(withDrums(base,best)).drums;
+      if(res.issues.length&&res.score<90){ const again=await fetchDrums(base,targets,{change:ask,previous:best,critic:res.issues}); if(again){ const r2=M.critique(withDrums(base,again)).drums; if(r2.score>res.score){ best=again; res=r2; } } }
+      if(res.score<50||!stillOn()) return null; M.setDrums(best,true);
+      /* the new kick pattern may no longer match the bass: re-lock it */
+      const p2=withDrums(base,best), bres=M.critique(p2).bass, lockIssues=bres.issues.filter(x=>/locked/.test(x));
+      if(lockIssues.length){ const bt=bassTargets(p2); if(bt.length){ const lk=kicksFor(p2,best,bt), nb=await fetchBass(p2,bt,{change:"re-lock to the new kick pattern",previous:prevOf(bt,"bassline","index"),critic:lockIssues,...lk});
+        if(nb&&M.critique(withBass(p2,nb)).bass.score>=bres.score&&stillOn()) M.setBass(nb,true); } }
+      return {chip:"REWORKED · "+tag};
+    }
+    /* mix and arrangement: the arranger changes instruments, levels, EQ */
+    const prev={sections:{},mix:base.mix||null}; base.sections.forEach((x,i)=>{ if(x&&(x.band||x.double)) prev.sections[i]={band:x.band,double:x.double}; });
+    const bandBase=JSON.parse(JSON.stringify(base)); if(src.band) bandBase.band=JSON.parse(JSON.stringify(src.band));
+    let best=await fetchOrchestra(bandBase,{change:ask,previous:prev}); if(!best) return null;
+    let res=M.critique(withOrch(bandBase,best)).orch;
+    if(res.issues.length&&res.score<90){ const again=await fetchOrchestra(bandBase,{change:ask,previous:best,critic:res.issues}); if(again){ const r2=M.critique(withOrch(bandBase,again)).orch; if(r2.score>res.score){ best=again; res=r2; } } }
+    if(res.score<50||!stillOn()) return null; M.setOrchestra(best,true); return {chip:"REWORKED · "+tag};
+  }catch(e){ return null; }
 }
 // Runs a music command. Returns a small descriptor that the chat shows as a card or a chip.
 async function runMusic(cmd,curMood){
@@ -1326,9 +1437,11 @@ async function runMusic(cmd,curMood){
     if(!act) return {error:"Nothing is playing yet — ask me to play something first."};
     const cur=M.current&&M.current(), inf=M.info&&M.info(), ask=String(cmd.ask||"").trim();
     if(!cur||cur.solo||cur.drums) return {error:"I can rewrite band pieces, not solos or drum solos. Ask for a new piece instead."};
+    const cls=classifyRevise(ask);
+    if(cls.part&&cur.planSrc){ const sr=await surgicalRevise(M,cur,ask,cls); if(sr) return sr; }
     const np=await reviseMusicPlan(cur,inf,ask);
     if(!np) return {error:"I couldn't rewrite it just now — try again in a moment, or ask for something simpler like a different energy or key."};
-    const nb={mood:cur.mood,intent:cur.intent,plan:np,seed:cur.seed}; const i2=M.play(nb); if(i2) polishMelody(np);
+    const carried=carryParts(cur.planSrc,np); const nb={mood:cur.mood,intent:cur.intent,plan:np,seed:cur.seed}; const i2=M.play(nb); if(i2) polishMelody(np,{keep:carried>0});
     return i2?{chip:"REWRITTEN · "+ask.slice(0,34).toUpperCase()}:{error:"I couldn't apply that change."};
   }
   if(c==="next"){ const cur=M.current&&M.current(); let np=null; if(cur&&!cur.solo&&!cur.drums) np=await fetchMusicPlan(cmd.ask||"another piece, clearly different from the last: new key, new chord progression, new feel",cur.mood,cur.style);
