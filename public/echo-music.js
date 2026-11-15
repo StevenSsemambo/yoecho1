@@ -476,7 +476,7 @@
   /* ═══════════════ AI composition plans ═══════════════
    * The chat model can write a plan (key, chords per bar, sections, instruments, feel, motif). parsePlan validates and repairs it;
    * anything wrong is clamped or dropped, and a plan that does not hold together returns null so the normal composer plays instead. */
-  var PLAN_KINDS = { intro: 1, verse: 1, chorus: 1, solo: 1, bridge: 1, "break": 1, build: 1, drop: 1, outro: 1, head: 1, trade: 1 };
+  var PLAN_KINDS = { intro: 1, verse: 1, chorus: 1, solo: 1, bridge: 1, "break": 1, build: 1, prechorus: 1, drop: 1, outro: 1, head: 1, trade: 1 };
   var PLAN_LEAD = { none: 1, sparse: 1, call: 1, theme: 1, varied: 1 };
   function chordQuality(rest) {
     var r = rest.toLowerCase().replace(/[\s()]/g, "").replace("♭", "b").replace("♯", "#").replace("min", "m").replace("-", "m").replace("ø", "m7b5").replace("°", "dim");
@@ -606,12 +606,20 @@
       var bars = clamp(Math.round(Number(rs.bars) || chords.length), 4, 24), dr = Number(rs.drums); if (!isFinite(dr)) dr = 2;
       var pm = parseMel(rs.mel, bars), pbs = parseBassLine(rs.bassline, bars), pg = parseGroove(rs.groove), pg2 = pg ? parseGroove(rs.groove2) : null;
       out.sections.push({ src: i, mel: pm ? pm.byBar : null, melBars: pm ? pm.bars : 0, bl: pbs ? pbs.byBar : null, blBars: pbs ? pbs.bars : 0, gv: pg ? { a: pg, b: pg2 } : null, band: parseBandObj(rs.band), dbl: parseDouble(rs.double), kind: kind, chords: chords, bars: bars, energy: clamp(typeof rs.energy === "number" ? rs.energy : .6, .1, 1), lead: lead, drums: clamp(Math.round(dr), 0, 2),
-        bass: rs.bass !== false, arp: rs.arp === true, comp: rs.comp !== false, fill: rs.fill !== false && kind !== "intro", crash: kind === "chorus" || kind === "drop" || kind === "solo" || rs.crash === true });
+        mod: rs.modulate === undefined ? -1 : clamp(Math.round(Number(rs.modulate) || 0), 0, 4), bass: rs.bass !== false, arp: rs.arp === true, comp: rs.comp !== false, fill: rs.fill !== false && kind !== "intro", crash: kind === "chorus" || kind === "drop" || kind === "solo" || rs.crash === true });
     }
     if (out.sections.length < 2) return null;
     var sig = function (x) { return x.kind + "|" + x.chords.map(function (c) { return c.rs + c.q; }).join(); }, seen = {};   /* a repeated section plays the same written melody */
     out.sections.forEach(function (x) { if (x.mel || x.bl || x.gv) { if (!seen[sig(x)]) seen[sig(x)] = x; } });
     out.sections.forEach(function (x) { var o = seen[sig(x)]; if (!o) return; if (!x.mel && o.mel && x.lead !== "none") { x.mel = o.mel; x.melBars = o.melBars; } if (!x.bl && o.bl && x.bass) { x.bl = o.bl; x.blBars = o.blBars; } if (!x.gv && o.gv && x.drums > 0) x.gv = o.gv; });
+    /* song development: the last big section (chorus or drop) can lift the key for the finish. Explicit "modulate" (0-4 semitones) wins; otherwise pop-like styles take a whole step up when there are two or more big sections */
+    (function () {
+      var big = [], i2; out.sections.forEach(function (x, ix) { if (x.kind === "chorus" || x.kind === "drop") big.push(ix); });
+      out.lastBig = big.length >= 2 ? big[big.length - 1] : -1;
+      var stl = String(p.style || "").toLowerCase();
+      out.sections.forEach(function (x, ix) { if (x.mod < 0) x.mod = (ix === out.lastBig && /^(pop|rnb|acoustic|afrobeats|rock|rocknroll|reggae)$/.test(stl) && x.energy >= .8) ? 2 : 0; });
+      for (i2 = 0; i2 < out.sections.length; i2++) if (out.sections[i2].mod > 0 && i2 !== out.lastBig && out.lastBig >= 0) out.sections[i2].mod = 0;
+    })();
     if (!out.mode) { var c0 = out.sections[0].chords[0].q; out.mode = (c0 === "min" || c0 === "m7" || c0 === "m9" || c0 === "m11" || c0 === "m6") ? "aeolian" : (c0 === "7" || c0 === "9" || c0 === "13") ? "mixolydian" : "ionian"; }
     var st = String(p.style || "").toLowerCase().replace(/[^a-z]/g, ""); st = ({ rockandroll: "rocknroll", hiphop2: "hiphop" })[st] || st; out.style = STYLES[st] && !STYLES[st].solo ? st : "";
     if (typeof p.bpm === "number" && isFinite(p.bpm)) out.bpm = clamp(Math.round(p.bpm), 50, 150);
@@ -1027,7 +1035,7 @@
     seed = seed >>> 0;
     var spec = resolveBrief(brief, seed);
     var rng = makeRng(seed);
-    var S = { barNo: 0, stage: -1, stageStart: 0, mode: spec.mode, root: spec.root, bpm: 90, bpmTarget: 90, arcName: "groove", arcIdx: 0, sec: null, secBar: 0, secNo: 0,
+    var S = { rootBase: spec.root, rootMod: 0, barNo: 0, stage: -1, stageStart: 0, mode: spec.mode, root: spec.root, bpm: 90, bpmTarget: 90, arcName: "groove", arcIdx: 0, sec: null, secBar: 0, secNo: 0,
               padV: null, compV: null, theme: null, progA: null, progB: null, cycle: 0, bias: spec.energyBias, steer: null,
               pal: null, style: null, styleName: "", recipe: null, tex: null, mask: {}, fixed: null, rub: 0 };
     var SOLO = spec.solo ? SOLO_SETUP[spec.solo] : null, PLAN = spec.plan || null;
@@ -1573,8 +1581,11 @@
       if (S.stage < spec.stages.length - 1 && S.barNo - S.stageStart >= spec.stages[S.stage].bars) enterStage(S.stage + 1, true);
       var arc = ARCS[S.arcName], tpl = arc[S.arcIdx % arc.length], ps = null;
       if (PLAN) {
+        if (S.planIdx % PLAN.sections.length === 0) S.rootMod = 0;
         ps = PLAN.sections[S.planIdx % PLAN.sections.length]; S.planIdx++;
-        tpl = { k: ps.kind, n: ps.bars / 4, e: ps.energy, lead: ps.lead, arp: ps.arp ? 1 : 0, drums: ps.drums, bass: ps.bass, fill: ps.fill, crash: ps.crash, lift: ps.kind === "solo" || ps.kind === "drop", cut: ps.kind === "intro" ? .6 : ps.kind === "outro" ? .6 : 0, riser: ps.kind === "build" };
+        if (ps.mod > 0) S.rootMod = ps.mod; S.root = (S.rootBase + S.rootMod) % 12;
+        var finalBig = (S.planIdx - 1) % PLAN.sections.length === PLAN.lastBig;
+        tpl = { k: ps.kind, n: ps.bars / 4, e: ps.energy, lead: ps.lead, arp: ps.arp ? 1 : 0, drums: ps.drums, bass: ps.bass, fill: ps.fill, crash: ps.crash, lift: ps.kind === "solo" || ps.kind === "drop" || (finalBig && ps.kind === "chorus"), cut: ps.kind === "intro" ? .6 : ps.kind === "outro" ? .6 : 0, riser: ps.kind === "build" || ps.kind === "prechorus" };
         if (S.planIdx > 0 && S.planIdx % PLAN.sections.length === 0) S.cycle++;
       } else if (S.arcIdx > 0 && S.arcIdx % arc.length === 0) {
         S.cycle++;
@@ -1647,6 +1658,16 @@
         ev = ev.filter(function (e) { return !(e.s >= 14 && (e.r === "pad" || e.r === "comp" || e.r === "lead" || e.r === "arp" || e.r === "bass")); });
         ev.push({ s: 8, r: "fx", k: "revcrash", d: 8, v: .55, p: 2 });
       }
+      /* section-to-section development: a rising sweep over the last two bars into a chorus or drop, and before the final one a half-bar of near silence so it lands harder */
+      if (PLAN && !S.style.solo && !spec.drums && sec.kind !== "build" && sec.kind !== "chorus" && sec.kind !== "drop" && sec.bars >= 4) {
+        var nxI = S.planIdx % PLAN.sections.length, nx = PLAN.sections[nxI], bigNext = nx && (nx.kind === "chorus" || nx.kind === "drop") && nx.energy >= sec.e;
+        if (bigNext && sec.kind !== "prechorus" && S.secBar === sec.bars - 2) ev.push({ s: 0, r: "fx", k: "riser", d: 32, v: .32, p: 2 });
+        if (bigNext && lastBar) {
+          var final = nxI === PLAN.lastBig;
+          ev = ev.filter(function (e) { return !(e.s >= (final ? 12 : 14) && (e.r === "pad" || e.r === "comp" || e.r === "lead" || e.r === "arp" || e.r === "bass" || (final && (e.r === "drums" || e.r === "perc") && e.k !== "snare" && e.k !== "tom"))); });
+          ev.push({ s: 8, r: "fx", k: "revcrash", d: 8, v: final ? .6 : .45, p: 2 });
+        }
+      }
       var mk = S.mask, fxm = S.fixed, hasMask = !!fxm; for (var mq in mk) if (mk[mq] === false) hasMask = true;
       if (hasMask) ev = ev.filter(function (e) { var kk = e.vx ? "voice" : (e.r === "drums" || e.r === "perc") ? "drums" : e.r; return mk[kk] !== false && !(fxm && fxm[kk] === false && e.r !== "fx"); });
       if (S.secBar === 0 && (sec.kind === "break" || sec.kind === "breath" || sec.kind === "bridge")) ev.push({ s: 0, r: "fx", k: "fall", d: 12, v: .4, p: 2 });
@@ -1657,6 +1678,7 @@
       var cut = 1, tpl = sec.tpl, prog = S.secBar / sec.bars;
       if (tpl.k === "intro") cut = lerp(tpl.cut || .55, 1, prog);
       else if (tpl.k === "build") cut = lerp(.55, 1, prog);
+      else if (tpl.k === "prechorus") cut = lerp(.7, 1, prog);
       else if (tpl.cut) cut = tpl.cut;
       var wet = (S.style.solo ? 1.5 : 1) + ((tpl.k === "break" || tpl.k === "breath" || tpl.k === "bridge") ? .7 : 0) + S.recipe.space * .2;
       var human = S.style.solo ? 1 : spec.drums ? .5 : S.styleName === "jazz" ? .75 : S.styleName === "blues" || S.styleName === "rocknroll" ? .65 : S.styleName === "lofi" ? .85 : (S.styleName === "house" || S.styleName === "trap") ? .12 : .45;
@@ -2893,9 +2915,11 @@
       Sx("intro", 4, .3, "C G Am F", { lead: "none", drums: 0 }),
       Sx("verse", 8, .5, "C G Am F", { drums: 1, mel: N("0:0:4:3 0:4:2:2 0:6:4:2 0:8:5:2 0:10:4:2 0:12:2:4 1:0:1:4 1:4:1:2 1:6:2:2 1:8:1:2 1:10:0:2 1:12:-1:4 2:0:2:4 2:4:2:2 2:6:0:2 2:8:2:4 2:12:0:4 3:0:0:4 3:4:5:2 3:6:3:2 3:8:0:8"),
         bassline: B("0:0:R:3 0:4:R:3 0:8:5:3 0:12:R:2 0:14:a:2"), groove: { kick: "x.......x.......", snare: "....x.......x...", hat: "x.x.x.x.x.x.x.x." } }),
+      Sx("prechorus", 4, .65, "Am F G G", { lead: "sparse", drums: 1 }),
       Sx("chorus", 8, .9, "F C G Am", { mel: N("0:0:5:4 0:4:5:2 0:6:7:2 0:8:5:4 0:12:3:4 1:0:7:4 1:4:7:2 1:6:6:2 1:8:4:4 1:12:2:4 2:0:6:4 2:4:6:2 2:6:7:2 2:8:6:4 2:12:4:4 3:0:7:6 3:6:5:2 3:8:2:8"),
         bassline: B("0:0:R:2 0:2:R:2 0:4:R:2 0:6:R:2 0:8:5:3 0:11:5:1 0:12:R:2 0:14:a:2"), groove: { kick: "x.....x.x.x.....", snare: "....x.......x...", clap: "....x.......x...", hat: "x.x.x.x.x.x.x.x.", open: "......x.......x." } }),
       Sx("verse", 8, .55, "C G Am F", { drums: 1 }),
+      Sx("prechorus", 4, .7, "Am F G G", { lead: "sparse", drums: 1 }),
       Sx("chorus", 8, .95, "F C G Am", {}),
       Sx("bridge", 4, .4, "Am Em F G", { lead: "sparse", drums: 1 }),
       Sx("chorus", 8, 1, "F C G Am", {}),
@@ -3119,6 +3143,7 @@
     ex.sections.forEach(function (sx, i) {
       if ((sx.kind === "chorus" || sx.kind === "drop") && sx.lead !== "none") sx.double = { inst: f[0], oct: f[1] };
       if (/bridge|break/.test(sx.kind) && sx.lead !== "none") sx.band = f[2];
+      if (/^(pop|rnb|acoustic)$/.test(k) && sx.kind === "chorus" && i === ex.sections.map(function (z) { return z.kind; }).lastIndexOf("chorus")) sx.modulate = 2;
       if (sx.kind === "intro") { var nb = {}; if (ex.band.arp !== "none") nb.arp = "none"; if (ex.band.comp !== "none") nb.comp = "none"; if (k !== "ambient" && k !== "cinematic") sx.band = nb; }
     });
     ex.mix = { lead: { lvl: m.lead || 1.1, rv: 1.0 }, pad: { lvl: m.pad || .9, rv: 1.2 }, bass: { lvl: m.bass || 1.05 }, drums: { lvl: m.drums || .95 } };

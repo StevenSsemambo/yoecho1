@@ -972,7 +972,7 @@ function loadEchoMusic(){
   if(_musicPromise) return _musicPromise;
   _musicPromise=new Promise((res,rej)=>{
     const el=document.createElement("script");
-    el.src="/echo-music.js?v=26"; el.async=true;
+    el.src="/echo-music.js?v=27"; el.async=true;
     el.onload=()=>{ if(window.EchoMusic){ window.dispatchEvent(new Event("echomusic-ready")); res(window.EchoMusic); } else rej(new Error("music engine missing")); };
     el.onerror=()=>rej(new Error("could not load the music engine"));
     document.head.appendChild(el);
@@ -1077,7 +1077,7 @@ SCHEMA
 {"title":"2-3 words","key":"E","mode":"major|minor|dorian|mixolydian|lydian|phrygian","bpm":50-150,"style":"rocknroll|rock|blues|jazz|reggae|funk|pop|hiphop|afrobeats|amapiano|lofi|house|trap|rnb|ambient|cinematic|acoustic",
 "band":{"pad":"…|none","comp":"…","lead":"…","arp":"…|none","bass":"…","ans":"…|none"},
 "motif":{"on":[0,3,6,10],"deg":[4,5,4,2]},
-"sections":[{"kind":"intro|verse|chorus|solo|bridge|break|build|drop|outro","bars":8,"energy":0.1-1,"chords":["Em7","A7",…],"lead":"none|sparse|call|theme|varied","drums":0|1|2,"bass":true,"comp":true,"arp":false}]}
+"sections":[{"kind":"intro|verse|prechorus|chorus|solo|bridge|break|build|drop|outro","bars":8,"energy":0.1-1,"chords":["Em7","A7",…],"lead":"none|sparse|call|theme|varied","drums":0|1|2,"bass":true,"comp":true,"arp":false}]}
 
 RULES
 - "chords" has ONE chord per bar, in order (the list repeats if bars is longer). Use chord symbols: C, Am, G7, Cmaj7, Dm7, F#m7b5, Bdim, Asus4, E5, Cadd9, C9, Dm9, A13, C6, plus slash bass is ignored.
@@ -1086,9 +1086,11 @@ RULES
 - Pick a tempo that is authentic for the genre. Pick a key that suits the mood and the instruments (guitar genres: E, A, D, G, C; horns: Bb, F, Eb; piano: anything).
 - "band": instruments that really belong together. Allowed: piano, keys (electric piano), organ, hammond, guitar (acoustic), eguitar (clean electric), dguitar (distorted rhythm), lguitar (lead guitar), strings, pad, choir, ooh (soft recorded voice oohs), synthchoir, vox (a sung "la" voice that can carry a melody), hum (closed-mouth humming), flute, sax, violin, brass, horns (section stabs), synth, bells, kalimba, marimba, clav (funky clavinet), pluck; bass: ebass, upbass (upright), sub, 808, synthbass, pluck. Use "none" for parts that should sit out (jazz: no pad/arp; rock: no arp). comp = rhythm/chords, lead = main melody, ans = a second voice that answers, arp = decoration or horn stabs.
 - "motif": the hook, 3-8 notes. "on" = sixteenth-note positions inside one bar (0-15, strictly increasing), "deg" = scale degrees (0 = key note, 7 = octave up, negatives go below). Make it singable: mostly stepwise with one leap, a rhythm with some syncopation, ending on a stable note (0, 2, 4).
+- SONG DEVELOPMENT: put a short "prechorus" (4 bars, energy rising, lead sparse) before the first chorus in pop, R&B, afrobeats, rock and acoustic pieces; the engine adds a rising sweep into every chorus and a pause before the last one. For a finish that lifts, add "modulate":2 (semitones, 1-4) to the LAST chorus in pop, R&B, acoustic, afrobeats and rock; leave it out in house, trap, hip-hop, ambient, blues and jazz. The last chorus should be the biggest of the song and repeat the hook, an octave higher the second time round.
 - "lead": theme = play the hook, call = hook every other bar, varied = improvised solo, sparse = a few long notes, none = silence.
 - Never ask questions, never explain. If a mood and a genre conflict, serve the genre they asked for with the mood in the key, tempo and energy.`;
-async function fetchMusicPlan(ask,mood,style){
+async function fetchMusicPlan(ask,mood,style){ const t0=Date.now(); const r=await _fetchMusicPlan(ask,mood,style); clogPre({agent:"planner",ms:Date.now()-t0,why:r?"ok":"failed, the engine composes instead",call:true}); return r; }
+async function _fetchMusicPlan(ask,mood,style){
   try{
     const ctl=new AbortController(), to=setTimeout(()=>ctl.abort(),9500);
     const res=await fetch("/.netlify/functions/chat",{method:"POST",headers:{"Content-Type":"application/json"},signal:ctl.signal,
@@ -1102,7 +1104,8 @@ async function fetchMusicPlan(ask,mood,style){
 const REVISE_ADDENDUM=`
 
 REVISION MODE: the user message is JSON with "change" (what the listener wants changed in the music that is playing right now) and either "currentPlan" (the plan being performed) or "currentPiece" (style, key, bpm, mood, band of a piece that has no plan). Return the COMPLETE updated plan in the same schema. Keep everything they did not ask to change (key, hook/motif, band, structure, tempo) and change only what they asked, as a real producer would: "bigger chorus" = higher energy, drums 2, add arp or ans voice, maybe 12-16 bars; "darker" = minor or phrygian/aeolian mode, lower energy and tempo, darker instruments (strings, pad, choir, lower register); "brighter/happier" = major or lydian, faster, brighter instruments; "add a guitar solo" = add a solo section (lead varied, energy 1) with lguitar or sax as lead; "change the chords" = write new progressions but keep key and style; "simpler" = fewer sections/arp/ans, lower energy; "busier" = more energy, arp true, drums 2; "different key" = transpose; "new melody" = a new motif. If currentPiece is given, compose a fresh plan that keeps its style, key, tempo and mood and applies the change.`;
-async function reviseMusicPlan(cur,info,ask){
+async function reviseMusicPlan(cur,info,ask){ const t0=Date.now(); const r=await _reviseMusicPlan(cur,info,ask); clogPre({agent:"planner (revise)",ms:Date.now()-t0,why:r?"ok":"failed",call:true}); return r; }
+async function _reviseMusicPlan(cur,info,ask){
   try{
     const ctl=new AbortController(), to=setTimeout(()=>ctl.abort(),9500);
     const base=cur&&cur.planSrc?{currentPlan:stripMel(cur.planSrc)}:{currentPiece:{style:(info&&info.style)||"",key:(info&&info.key)||"",bpm:(info&&info.bpm)||0,mood:(info&&info.mood)||"neutral",band:(info&&info.palette)||{}}};
@@ -1125,15 +1128,17 @@ Write like a real songwriter:
 - Rhythm: mix long and short notes, put some notes just off the beat (steps 2, 6, 10, 14), leave a rest or a long note at the end of each phrase. 3 to 9 notes per bar.
 - The chorus melody must be clearly different from the verse melody, and should be the most memorable thing in the piece.
 If the message contains "critic" notes and a "previous" melody, rewrite the melody to fix exactly those problems and keep what already works. Never explain.`;
-async function aiJson(system,payload,ms,tokens){
+async function aiJson(system,payload,ms,tokens,agent){
+  const t0=Date.now(); let why="ok", prov="", mdl="";
   try{
     const ctl=new AbortController(), to=setTimeout(()=>ctl.abort(),ms||12000);
     const res=await fetch("/.netlify/functions/chat",{method:"POST",headers:{"Content-Type":"application/json"},signal:ctl.signal,
       body:JSON.stringify({system,maxTokens:tokens||2000,messages:[{role:"user",content:JSON.stringify(payload)}]})});
-    clearTimeout(to); if(!res.ok){ if(res.status===429||res.status===503) window.__aiCool=Date.now()+180000; return null; }
-    const d=await res.json(), t=String(d.text||""), a=t.indexOf("{"), z=t.lastIndexOf("}"); if(a<0||z<a) return null;
-    return JSON.parse(t.slice(a,z+1));
-  }catch(e){ return null; }
+    clearTimeout(to); if(!res.ok){ why="http "+res.status; if(res.status===429||res.status===503){ window.__aiCool=Date.now()+180000; why+=" · resting 3 min"; } return null; }
+    const d=await res.json(), t=String(d.text||""), a=t.indexOf("{"), z=t.lastIndexOf("}"); prov=d.provider||""; mdl=d.model||""; if(a<0||z<a){ why="no JSON in answer"; return null; }
+    try{ return JSON.parse(t.slice(a,z+1)); }catch(e){ why="bad JSON"; return null; }
+  }catch(e){ why=e&&e.name==="AbortError"?"timeout":"error"; return null; }
+  finally{ clogAgent(null,{agent:(agent||"agent")+(payload&&(payload.critic||payload.change)?" (retry)":""),ms:Date.now()-t0,why,ai:(prov+" "+mdl).trim(),call:true}); }
 }
 function stripMel(plan){ const c=JSON.parse(JSON.stringify(plan)); (c.sections||[]).forEach(x=>{ if(x&&typeof x==="object"){ delete x.mel; delete x.bassline; delete x.groove; delete x.groove2; delete x.band; delete x.double; } }); delete c.mix; return c; }
 function melTargets(an){
@@ -1148,7 +1153,7 @@ async function fetchMelodies(an,targets,extra){
   const payload={key:an.key,mode:an.mode,scaleLength:an.scale,sections:targets.map(s=>({index:s.src,kind:s.kind,bars:Math.min(s.bars,4),
     tones:s.chords.slice(0,4)})),...(extra||{})};
   Object.assign(payload,exFor("mel"),tasteFor("mel",2),extra||{});
-  const r=await aiJson(MELODY_SYSTEM+TASTE_NOTE+EX_NOTE+CHANGE_NOTE,payload,12000,2200);
+  const r=await aiJson(MELODY_SYSTEM+TASTE_NOTE+EX_NOTE+CHANGE_NOTE,payload,12000,2200,"melody");
   return r&&r.mel&&typeof r.mel==="object"?r.mel:null;
 }
 const BASS_SYSTEM=`You are a great session bassist writing the BASS LINE for sections of a piece whose chords are fixed. Return ONE JSON object and nothing else: {"bass":{"<sectionIndex>":[[bar,step,tone,length],...]}}.
@@ -1161,7 +1166,7 @@ If the message contains "critic" notes and a "previous" line, rewrite it to fix 
 async function fetchBass(plan,targets,extra){
   const payload={style:plan.style||"",bpm:plan.bpm||0,bass:(plan.band&&plan.band.bass)||"",sections:targets.map(t=>({index:t.index,kind:t.kind,energy:t.energy,chords:t.chords}))};
   Object.assign(payload,exFor("bass"),tasteFor("bass",2),extra||{});
-  const r=await aiJson(BASS_SYSTEM+TASTE_NOTE+EX_NOTE+CHANGE_NOTE+LOCK_NOTE+LOCK2_NOTE,payload,12000,1400);
+  const r=await aiJson(BASS_SYSTEM+TASTE_NOTE+EX_NOTE+CHANGE_NOTE+LOCK_NOTE+LOCK2_NOTE,payload,12000,1400,"bass");
   return r&&r.bass&&typeof r.bass==="object"?r.bass:null;
 }
 function bassTargets(plan){
@@ -1172,6 +1177,30 @@ function bassTargets(plan){
   return out;
 }
 function withBass(plan,map){ const c=JSON.parse(JSON.stringify(plan)); for(const k in map){ const sx=c.sections&&c.sections[k]; if(sx) sx.bassline=map[k]; } return c; }
+// ── COMPOSER LOG: what every music agent did for the last pieces (timing, model, scores, retries, when each part landed). Kept on this device; the Music screen has a panel to read or copy it. ──
+const CLOG={KEY:"yoecho_clog",pieces:[],cur:null,pre:[],hooked:false};
+try{ CLOG.pieces=JSON.parse(localStorage.getItem(CLOG.KEY)||"[]")||[]; }catch(e){ CLOG.pieces=[]; }
+function clogSave(){ try{ localStorage.setItem(CLOG.KEY,JSON.stringify(CLOG.pieces.slice(0,8))); }catch(e){} }
+function clogPre(o){ CLOG.pre.push(o); CLOG.pre=CLOG.pre.slice(-4); }
+function clogStart(plan,M){
+  const cu=M.current&&M.current(), inf=M.info&&M.info();
+  const p={id:Date.now(),clock:new Date().toTimeString().slice(0,8),title:(inf&&inf.title)||plan.title||"",style:plan.style||(inf&&inf.style)||"",bpm:plan.bpm||(inf&&inf.bpm)||0,key:plan.key||"",mood:(cu&&cu.mood)||"",t0:Date.now(),agents:CLOG.pre.map(x=>({...x,at:0})),vote:null,tags:[],final:null};
+  CLOG.pre=[]; CLOG.cur=p; CLOG.pieces.unshift(p); CLOG.pieces=CLOG.pieces.slice(0,8);
+  if(!CLOG.hooked&&M.on){ CLOG.hooked=true; M.on(o=>{ if(!CLOG.cur) return; if(o.type==="like") CLOG.cur.vote="up"; else if(o.type==="dislike") CLOG.cur.vote="down"; else return; clogSave(); }); }
+  clogSave(); return p;
+}
+function clogAgent(piece,o){ const p=piece||CLOG.cur; if(!p){ if(o&&o.call) return; return; } p.agents.push({...o,at:+((Date.now()-p.t0)/1000).toFixed(1)}); if(p.agents.length>40) p.agents.shift(); clogSave(); }
+function clogFinal(M){
+  try{ const p=CLOG.cur, cu=M.current&&M.current(), src=cu&&cu.planSrc; if(!p||!src||!M.critique) return;
+    const r=M.critique(JSON.parse(JSON.stringify(src))); p.final={all:r.score,plan:r.plan&&r.plan.score,mel:r.mel&&r.mel.score,bass:r.bass&&r.bass.score,drums:r.drums&&r.drums.score,orch:r.orch&&r.orch.score,cross:r.cross&&r.cross.score,issues:(r.issues||[]).slice(0,4)}; clogSave(); }catch(e){}
+}
+function clogDiagnose(p){
+  const out=[]; (p.agents||[]).forEach(a=>{ if(a.call&&a.why&&a.why!=="ok") out.push(a.agent+" failed: "+a.why); if(a.applied===false) out.push(a.agent+" not used: "+(a.why||"")); });
+  const land=(p.agents||[]).filter(a=>a.applied).map(a=>a.at); if(land.length&&Math.max(...land)>20) out.push("slow: parts landed up to "+Math.max(...land)+"s in");
+  if(!(p.agents||[]).some(a=>a.applied)) out.push("no written part was applied: this piece is the engine's own composing");
+  const f=p.final; if(f){ ["mel","bass","drums","orch","cross","plan"].forEach(k=>{ if(f[k]!=null&&f[k]<80) out.push(k+" scored "+f[k]); }); }
+  return out;
+}
 const EX_NOTE=`
 
 MASTER EXAMPLE: the message may contain "goodExample" (a whole plan) or "exampleOf" (a verse and chorus part): a hand-written piece by a master of this genre, shown only to teach craft and feel (form, harmonic rhythm, hook shape, phrasing, groove). Write something NEW in the same spirit. Never copy its chords or notes, and let the request and the listener decide the genre.`;
@@ -1220,7 +1249,7 @@ Rules: always give a backbeat (snare, clap or rim on 4 and 12, or on 8 for half-
 If the message contains "critic" notes and a "previous" groove, rewrite it to fix exactly those problems and keep what works. Never explain.`+TASTE_NOTE;
 async function fetchDrums(plan,targets,extra){
   const payload={style:plan.style||"",bpm:plan.bpm||0,sections:targets,...exFor("drums"),...tasteFor("drums",2),...(extra||{})};
-  const r=await aiJson(DRUM_SYSTEM+EX_NOTE+CHANGE_NOTE,payload,12000,1500);
+  const r=await aiJson(DRUM_SYSTEM+EX_NOTE+CHANGE_NOTE,payload,12000,1500,"drums");
   return r&&r.drums&&typeof r.drums==="object"?r.drums:null;
 }
 function drumTargets(plan){
@@ -1244,7 +1273,7 @@ If the message contains "critic" notes and a "previous" arrangement, rewrite it 
 async function fetchOrchestra(plan,extra){
   const payload={style:plan.style||"",bpm:plan.bpm||0,key:plan.key||"",mode:plan.mode||"",title:plan.title||"",band:plan.band||{},
     sections:(plan.sections||[]).map((x,i)=>({index:i,kind:x&&x.kind,energy:x&&x.energy,lead:x&&x.lead,drums:x&&x.drums})),ranges:(window.EchoMusic&&window.EchoMusic.ranges&&window.EchoMusic.ranges())||{},...tasteFor("orch",2),...(extra||{})};
-  const r=await aiJson(ORCH_SYSTEM+RANGE_NOTE+CHANGE_NOTE,payload,12000,1900);
+  const r=await aiJson(ORCH_SYSTEM+RANGE_NOTE+CHANGE_NOTE,payload,12000,1900,"arranger");
   return r&&r.orchestra&&typeof r.orchestra==="object"?r.orchestra:null;
 }
 function withOrch(plan,o){
@@ -1259,6 +1288,7 @@ function kickFor(plan,map,idx){
 }
 function kicksFor(plan,map,targets){ const o={}; (targets||[]).forEach(t=>{ const k=kickFor(plan,map,t.index); if(k) o[t.index]=k; }); return Object.keys(o).length?{kick:o}:{}; }
 /* after the parts land, check them against each other (melody vs bass, total busyness); a clash is fixed by the bassist, who moves under the tune */
+const fmt0=(a,b)=>a+" → "+b;
 async function reconcileParts(M){
   try{
     const cur=M.current&&M.current(), src=cur&&cur.planSrc; if(!src||!M.critique) return;
@@ -1269,19 +1299,21 @@ async function reconcileParts(M){
     window.__mctx={style:base.style||cur.style||"",mood:cur.mood||"neutral"};
     const nb=await fetchBass(base,targets,{change:"fix the clashes with the melody and the busyness",previous:prev,melody:mel,critic:cr.issues,...kicksFor(base,km,targets)}); if(!nb) return;
     const r2=M.critique(withBass(base,nb)); if(!(r2.cross.score>cr.score)||r2.bass.score<60) return;
-    const c2=M.current&&M.current(); if(!c2||c2.planSrc!==src) return; M.setBass(nb,false); window.__lastCrossScore=r2.cross.score;
+    const c2=M.current&&M.current(); if(!c2||c2.planSrc!==src) return; M.setBass(nb,false); window.__lastCrossScore=r2.cross.score; clogAgent(null,{agent:"bass fix",score:fmt0(cr.score,r2.cross.score),applied:true,why:"melody/bass clash fixed"});
   }catch(e){}
 }
 // Background: the piece starts at once with the engine's own hook and bass; the written parts land from the next section on.
 async function polishMelody(plan,opt){
   opt=opt||{}; const keep=!!opt.keep;
   const M=window.EchoMusic; if(!M||!M.critique||!plan||typeof plan!=="object") return;
+  clogStart(plan,M);
   /* quota care: the extra writers are optional, so they stand down while the AI is rate limited, and the listener can choose how many to run
      (console: localStorage.setItem('yoecho_composer','0'|'1'|'2'): 0 = chord plan only, 1 = melody + bass, 2 = everything) */
-  if(Date.now()<(window.__aiCool||0)) return;
+  if(Date.now()<(window.__aiCool||0)){ clogAgent(null,{agent:"written parts",applied:false,why:"skipped: AI is rate limited (resting)"}); return; }
   let level=2; try{ const v=localStorage.getItem('yoecho_composer'); if(v==='0'||v==='1'||v==='2') level=Number(v); }catch(e){}
-  if(level===0) return;
+  if(level===0){ clogAgent(null,{agent:"written parts",applied:false,why:"skipped: composer level is 0"}); return; }
   const stillOn=()=>{ const cur=M.current&&M.current(); return !!cur&&(cur.planSrc===plan||cur.plan===plan); };
+  const lg=(a,o)=>clogAgent(null,{agent:a,...o}), fmt=(a,b)=>a===b?String(a):a+" → "+b;
   { const cu=M.current&&M.current(); window.__mctx={style:plan.style||(cu&&cu.style)||"",mood:(cu&&cu.mood)||"neutral"}; }
   let drumP=Promise.resolve(null);
   const melPass=async()=>{
@@ -1289,14 +1321,14 @@ async function polishMelody(plan,opt){
       if(!M.tonesOf||!M.setMelodies) return;
       const base=keep?JSON.parse(JSON.stringify(plan)):stripMel(plan), an=M.tonesOf(base); if(!an) return;
       const targets=melTargets(an).filter(t=>!keep||!(base.sections[t.src]&&base.sections[t.src].mel)); if(!targets.length) return;
-      let best=await fetchMelodies(an,targets); if(!best) return;
-      let res=M.critique(withMel(base,best)).mel;
+      let best=await fetchMelodies(an,targets); if(!best){ lg("melody",{applied:false,why:"no usable answer"}); return; }
+      let res=M.critique(withMel(base,best)).mel; const s1=res.score;
       if(level>=2&&res.score<80&&res.issues.length){
         const again=await fetchMelodies(an,targets,{critic:res.issues,previous:best});
         if(again){ const r2=M.critique(withMel(base,again)).mel; if(r2.score>res.score){ best=again; res=r2; } }
       }
-      if(res.score<45||!stillOn()) return;
-      M.setMelodies(best); window.__lastMelodyScore=res.score;
+      if(res.score<45||!stillOn()){ lg("melody",{score:fmt(s1,res.score),applied:false,why:res.score<45?"score too low":"piece changed"}); return; }
+      M.setMelodies(best); window.__lastMelodyScore=res.score; lg("melody",{score:fmt(s1,res.score),applied:true});
     }catch(e){}
   };
   const bassPass=async()=>{
@@ -1308,28 +1340,28 @@ async function polishMelody(plan,opt){
       const dm=await Promise.race([drumP,new Promise(r=>setTimeout(()=>r(null),16000))]);
       if(dm) base=withDrums(base,dm);
       const lock=kicksFor(base,dm,targets);
-      let best=await fetchBass(base,targets,lock); if(!best) return;
-      let res=M.critique(withBass(base,best)).bass;
+      let best=await fetchBass(base,targets,lock); if(!best){ lg("bass",{applied:false,why:"no usable answer"}); return; }
+      let res=M.critique(withBass(base,best)).bass; const s1=res.score;
       if(level>=2&&res.issues.length){
         const again=await fetchBass(base,targets,{critic:res.issues,previous:best,...lock});
         if(again){ const r2=M.critique(withBass(base,again)).bass; if(r2.score>res.score){ best=again; res=r2; } }
       }
-      if(res.score<50||!stillOn()) return;
-      M.setBass(best); window.__lastBassScore=res.score;
+      if(res.score<50||!stillOn()){ lg("bass",{score:fmt(s1,res.score),applied:false,why:res.score<50?"score too low":"piece changed"}); return; }
+      M.setBass(best); window.__lastBassScore=res.score; lg("bass",{score:fmt(s1,res.score),applied:true,why:dm?"locked to the drummer's kick":"no kick pattern available"});
     }catch(e){}
   };
   const drumPass=async()=>{
     try{
       if(!M.setDrums) return null;
       const base=keep?JSON.parse(JSON.stringify(plan)):stripMel(plan), targets=drumTargets(base).filter(t=>!keep||!base.sections[t.index].groove); if(!targets.length) return null;
-      let best=await fetchDrums(base,targets); if(!best) return null;
-      let res=M.critique(withDrums(base,best)).drums;
+      let best=await fetchDrums(base,targets); if(!best){ lg("drums",{applied:false,why:"no usable answer"}); return null; }
+      let res=M.critique(withDrums(base,best)).drums; const s1=res.score;
       if(res.issues.length){
         const again=await fetchDrums(base,targets,{critic:res.issues,previous:best});
         if(again){ const r2=M.critique(withDrums(base,again)).drums; if(r2.score>res.score){ best=again; res=r2; } }
       }
-      if(res.score<50||!stillOn()) return null;
-      M.setDrums(best); window.__lastDrumScore=res.score; return best;
+      if(res.score<50||!stillOn()){ lg("drums",{score:fmt(s1,res.score),applied:false,why:res.score<50?"score too low":"piece changed"}); return null; }
+      M.setDrums(best); window.__lastDrumScore=res.score; lg("drums",{score:fmt(s1,res.score),applied:true}); return best;
     }catch(e){ return null; }
   };
   if(level>=2) drumP=drumPass();
@@ -1338,18 +1370,19 @@ async function polishMelody(plan,opt){
       if(!M.setOrchestra) return;
       if(keep&&plan.mix) return;
       const base=stripMel(plan); if(plan.band) base.band=JSON.parse(JSON.stringify(plan.band)); if(plan.mix===undefined) delete base.mix;
-      let best=await fetchOrchestra(base); if(!best) return;
-      let res=M.critique(withOrch(base,best)).orch;
+      let best=await fetchOrchestra(base); if(!best){ lg("arranger",{applied:false,why:"no usable answer"}); return; }
+      let res=M.critique(withOrch(base,best)).orch; const s1=res.score;
       if(res.issues.length){
         const again=await fetchOrchestra(base,{critic:res.issues,previous:best});
         if(again){ const r2=M.critique(withOrch(base,again)).orch; if(r2.score>res.score){ best=again; res=r2; } }
       }
-      if(res.score<50||!stillOn()) return;
-      M.setOrchestra(best); window.__lastOrchScore=res.score;
+      if(res.score<50||!stillOn()){ lg("arranger",{score:fmt(s1,res.score),applied:false,why:res.score<50?"score too low":"piece changed"}); return; }
+      M.setOrchestra(best); window.__lastOrchScore=res.score; lg("arranger",{score:fmt(s1,res.score),applied:true});
     }catch(e){}
   };
   await Promise.all(level>=2?[melPass(),bassPass(),drumP,orchPass()]:[melPass(),bassPass()]);
   if(level>=2) await reconcileParts(M);
+  clogFinal(M);
 }
 // ── SURGICAL REVISIONS: a request about one part rewrites only that part (and re-locks the bass when the drums change); everything else keeps playing ──
 function classifyRevise(ask){
@@ -1460,7 +1493,7 @@ async function runMusic(cmd,curMood){
     const cur=M.current&&M.current(), inf=M.info&&M.info(), ask=String(cmd.ask||"").trim();
     if(!cur||cur.solo||cur.drums) return {error:"I can rewrite band pieces, not solos or drum solos. Ask for a new piece instead."};
     const cls=classifyRevise(ask);
-    if(cls.part&&cur.planSrc){ const sr=await surgicalRevise(M,cur,ask,cls); if(sr){ reconcileParts(M); return sr; } }
+    if(cls.part&&cur.planSrc){ const sr=await surgicalRevise(M,cur,ask,cls); if(sr){ clogAgent(null,{agent:"revision",applied:true,why:cls.part+(cls.kinds?" · "+cls.kinds[0]:"")+" · \""+String(ask).slice(0,40)+"\""}); reconcileParts(M); return sr; } }
     const np=await reviseMusicPlan(cur,inf,ask);
     if(!np) return {error:"I couldn't rewrite it just now — try again in a moment, or ask for something simpler like a different energy or key."};
     const carried=carryParts(cur.planSrc,np); const nb={mood:cur.mood,intent:cur.intent,plan:np,seed:cur.seed}; const i2=M.play(nb); if(i2) polishMelody(np,{keep:carried>0});
@@ -1532,6 +1565,28 @@ function downloadWav(M,setBusy,mode,idx,wav){
   }).catch(()=>{}).finally(()=>setBusy(false));
 }
 function thumbDown(M){ M.feedback(-1); runMusic({cmd:"next"},(M.current()||{}).mood).catch(()=>{}); }
+function ComposerLog({acc}){
+  const[open,setOpen]=useState(false), [,bump]=useState(0), [copied,setCopied]=useState(false);
+  useEffect(()=>{ if(!open) return; const id=setInterval(()=>bump(x=>x+1),1500); return()=>clearInterval(id); },[open]);
+  const P=CLOG.pieces, tag=(p,t)=>{ p.tags=p.tags.includes(t)?p.tags.filter(x=>x!==t):[...p.tags,t]; clogSave(); bump(x=>x+1); };
+  const copy=()=>{ try{ const txt=JSON.stringify(P.map(p=>({...p,diagnosis:clogDiagnose(p)}))); navigator.clipboard.writeText(txt).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2500);}); }catch(e){} };
+  const tiny={fontSize:10,lineHeight:1.7,color:"rgba(235,228,216,.62)",fontFamily:SS};
+  return <div style={{marginTop:22}}>
+    <button onClick={()=>setOpen(o=>!o)} style={{...mbtn,fontSize:9,opacity:.75}}>{open?"▾":"▸"} COMPOSER LOG</button>
+    {open&&<div style={{marginTop:10}}>
+      {P.length===0&&<div style={tiny}>Nothing yet. Ask for a piece, give it a few seconds, then look here.</div>}
+      {P.slice(0,5).map(p=>{ const dg=clogDiagnose(p), f=p.final; return <div key={p.id} style={{padding:"10px 12px",marginBottom:9,borderRadius:12,background:"rgba(196,168,130,.06)",border:"1px solid rgba(196,168,130,.14)"}}>
+        <div style={{...tiny,color:"rgba(235,228,216,.9)",fontSize:12}}>{p.title||"Untitled"} <span style={{opacity:.55}}>· {p.style} · {p.bpm} BPM · {p.clock}</span> {p.vote==="up"?"👍":p.vote==="down"?"👎":""}</div>
+        {f&&<div style={{...tiny,color:acc}}>SCORES {["plan","mel","bass","drums","orch","cross"].map(k=>k.toUpperCase()+" "+(f[k]==null?"–":f[k])).join(" · ")}</div>}
+        {(p.agents||[]).map((a,i)=><div key={i} style={tiny}>{a.at!=null&&a.call!==true?"+"+a.at+"s ":""}{a.applied===true?"✓ ":a.applied===false?"✗ ":""}{a.agent}{a.ms!=null?" · "+(a.ms/1000).toFixed(1)+"s":""}{a.score?" · score "+a.score:""}{a.why&&a.why!=="ok"?" · "+a.why:""}{a.ai?" · "+a.ai:""}</div>)}
+        {dg.length>0&&<div style={{...tiny,color:"#e0a47a",marginTop:4}}>{dg.map((d,i)=><div key={i}>⚠ {d}</div>)}</div>}
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:7}}>{["FLAT","BUSY","CLASH","LOVELY"].map(t=><button key={t} onClick={()=>tag(p,t)} style={{...mbtn,minHeight:26,padding:"3px 9px",fontSize:9,borderColor:p.tags.includes(t)?acc:"rgba(196,168,130,.22)",background:p.tags.includes(t)?acc+"26":undefined}}>{t}</button>)}</div>
+      </div>; })}
+      {P.length>0&&<div style={{display:"flex",gap:7}}><button style={mbtn} onClick={copy}>{copied?"COPIED":"COPY LOG"}</button><button style={mbtn} onClick={()=>{CLOG.pieces=[];clogSave();bump(x=>x+1);}}>CLEAR</button></div>}
+      <div style={{...tiny,opacity:.5,marginTop:8}}>Tag a piece FLAT, BUSY, CLASH or LOVELY, then copy the log and send it to your developer: it shows exactly which part was weak.</div>
+    </div>}
+  </div>;
+}
 const mbtn={background:"rgba(196,168,130,.09)",border:"1px solid rgba(196,168,130,.22)",borderRadius:14,padding:"7px 12px",color:"#c4a882",fontSize:10,letterSpacing:".08em",cursor:"pointer",fontFamily:SS,minHeight:34};
 
 // The card inside a chat bubble
@@ -1659,6 +1714,7 @@ function MusicScreen({mood,tick,speaking,onBack}){
           <button disabled={dl>=0} onClick={()=>downloadWav(M,b=>setDl(b?k:-1),"full",k)} aria-label={"Download "+s.t} style={{...mbtn,opacity:dl>=0?.5:1,minWidth:64}}>{dl===k?"RENDERING…":"⤓ MP3"}</button>
         </div>)}
       </div>}
+      <ComposerLog acc={m.acc}/>
       <p style={{marginTop:24,fontSize:11,lineHeight:1.8,color:"rgba(196,168,130,.4)",fontFamily:SS}}>Every piece is composed on your device, from a fresh seed, so it won't repeat. You can also just ask Echo in chat — "play me something to calm down".</p>
     </div>
   </div>;
