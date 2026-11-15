@@ -2839,7 +2839,32 @@
     return new Blob([ab], { type: "audio/wav" });
   }
   function exportMixWav(opts, seconds) { return renderMix(opts, seconds || 120, { lite: false }).then(toWav); }
-  function exportWav(brief, seconds, o) { o = o || {}; return render(brief, seconds || 60, { lite: false, sampleRate: o.sampleRate }).then(toWav); }
+  /* MP3 (lamejs, LGPL, bundled in vendor/lame.min.js and loaded only when a download asks for it). Encoding is done in slices so the page stays responsive. */
+  var lamePromise = null;
+  function loadLame() {
+    if (global.lamejs) return Promise.resolve(global.lamejs); if (lamePromise) return lamePromise;
+    lamePromise = new Promise(function (res, rej) { var el = global.document.createElement("script"); el.src = (SMP.base ? SMP.base.replace(/samples\/?$/, "") : "/") + "vendor/lame.min.js"; el.onload = function () { global.lamejs ? res(global.lamejs) : rej(new Error("mp3 encoder missing")); }; el.onerror = function () { lamePromise = null; rej(new Error("could not load the mp3 encoder")); }; global.document.head.appendChild(el); });
+    return lamePromise;
+  }
+  function toMp3(buf, kbps) {
+    return loadLame().then(function (L) {
+      return new Promise(function (resolve, reject) {
+        try {
+          var ch = Math.min(2, buf.numberOfChannels), sr = buf.sampleRate, n = buf.length, enc = new L.Mp3Encoder(ch, sr, kbps || 160), out = [], pos = 0, BL = 1152 * 12, l = new Int16Array(n), r = ch > 1 ? new Int16Array(n) : null, i;
+          var d0 = buf.getChannelData(0), d1 = ch > 1 ? buf.getChannelData(1) : null;
+          for (i = 0; i < n; i++) { var a = clamp(d0[i], -1, 1); l[i] = a < 0 ? a * 32768 : a * 32767; if (r) { var b = clamp(d1[i], -1, 1); r[i] = b < 0 ? b * 32768 : b * 32767; } }
+          (function step() {
+            try {
+              var t0 = Date.now(); while (pos < n && Date.now() - t0 < 25) { var k = enc.encodeBuffer(l.subarray(pos, pos + BL), r ? r.subarray(pos, pos + BL) : undefined); if (k.length) out.push(new Uint8Array(k)); pos += BL; }
+              if (pos < n) return setTimeout(step, 0);
+              var f = enc.flush(); if (f.length) out.push(new Uint8Array(f)); resolve(new Blob(out, { type: "audio/mpeg" }));
+            } catch (e) { reject(e); }
+          })();
+        } catch (e) { reject(e); }
+      });
+    });
+  }
+  function exportWav(brief, seconds, o) { o = o || {}; return render(brief, seconds || 60, { lite: false, sampleRate: o.sampleRate }).then(o.mp3 ? function (b) { return toMp3(b, o.kbps); } : toWav); }
   /* how long one full pass through the written form lasts (a piece without a plan: two minutes) */
   function songSeconds(brief) {
     try {
@@ -2848,9 +2873,9 @@
       return clamp(Math.round(bars * 240 / bpm + 4), 30, 420);
     } catch (e) { return 120; }
   }
-  function exportSong(brief) { var sec = songSeconds(brief); return exportWav(brief, sec, { sampleRate: sec > 200 ? 32000 : 44100 }); }
+  function exportSong(brief, o) { o = o || {}; var sec = songSeconds(brief); return exportWav(brief, sec, { sampleRate: o.mp3 || sec <= 200 ? 44100 : 32000, mp3: o.mp3, kbps: o.kbps }); }
   function savedBrief(i) { var e = taste.seeds[i]; if (!e) return null; var b = {}; for (var k in e.b) b[k] = e.b[k]; b.seed = strToSeed(e.s); b._title = e.t; return b; }
-  function exportSaved(i, seconds) { var b = savedBrief(i); if (!b) return Promise.reject(new Error("no such piece")); return seconds ? exportWav(b, seconds) : exportSong(b); }
+  function exportSaved(i, seconds, o) { var b = savedBrief(i); if (!b) return Promise.reject(new Error("no such piece")); return seconds ? exportWav(b, seconds, o) : exportSong(b, o); }
 
   /* ═══════════════ genre exemplars ═══════════════
    * One hand-written, professionally structured piece per genre. They are never played; they are shown to the LLM writers as "this is what good looks like"

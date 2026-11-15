@@ -972,7 +972,7 @@ function loadEchoMusic(){
   if(_musicPromise) return _musicPromise;
   _musicPromise=new Promise((res,rej)=>{
     const el=document.createElement("script");
-    el.src="/echo-music.js?v=25"; el.async=true;
+    el.src="/echo-music.js?v=26"; el.async=true;
     el.onload=()=>{ if(window.EchoMusic){ window.dispatchEvent(new Event("echomusic-ready")); res(window.EchoMusic); } else rej(new Error("music engine missing")); };
     el.onerror=()=>rej(new Error("could not load the music engine"));
     document.head.appendChild(el);
@@ -1519,15 +1519,15 @@ function MusicViz({color,n=5,h=18,w=3}){
     {Array.from({length:n}).map((_,i)=><div key={i} ref={el=>refs.current[i]=el} style={{width:w,height:h,borderRadius:w,background:color,transformOrigin:"center",transform:"scaleY(.2)"}}/>)}
   </div>;
 }
-// Download: mode "min" = the first minute, "full" = one full pass through the written form; idx = a liked piece (rendered again from its saved plan and seed, so it matches what you heard)
-function downloadWav(M,setBusy,mode,idx){
+// Download (MP3 by default, WAV when asked): mode "min" = the first minute, "full" = one full pass through the written form; idx = a liked piece (rendered again from its saved plan and seed, so it matches what you heard)
+function downloadWav(M,setBusy,mode,idx,wav){
   setBusy(true);
   const saved=typeof idx==="number", b=saved?M.savedBrief(idx):(M.current()||{mood:"neutral"});
   if(!b){ setBusy(false); return; }
-  const job=saved?M.exportSaved(idx):(mode==="full"?M.exportSong(b):M.exportWav(b,60));
+  const o=wav?{}:{mp3:true,kbps:160}, job=saved?M.exportSaved(idx,0,o):(mode==="full"?M.exportSong(b,o):M.exportWav(b,60,o));
   job.then(blob=>{
     const nm=(saved?b._title:(M.info().title))||"piece", a=document.createElement("a"); a.href=URL.createObjectURL(blob);
-    a.download="yoecho-"+String(nm).toLowerCase().replace(/[^a-z0-9]+/g,"-")+(mode==="min"?"-1min":"")+".wav";
+    a.download="yoecho-"+String(nm).toLowerCase().replace(/[^a-z0-9]+/g,"-")+(mode==="min"?"-1min":"")+(wav?".wav":".mp3");
     document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},4000);
   }).catch(()=>{}).finally(()=>setBusy(false));
 }
@@ -1575,6 +1575,7 @@ function MusicControls({M,info,acc}){
       <button style={mbtn} onClick={()=>M.steer({energy:.2,bpm:6})}>+ ENERGY</button>
       <button style={{...mbtn,opacity:busy?.5:1}} disabled={busy} onClick={()=>downloadWav(M,setBusy,"min")}>{busy?"RENDERING…":"⤓ 1 MIN"}</button>
       <button style={{...mbtn,opacity:busy?.5:1}} disabled={busy} onClick={()=>downloadWav(M,setBusy,"full")}>{busy?"RENDERING…":"⤓ FULL SONG"}</button>
+      <button style={{...mbtn,opacity:busy?.5:1}} disabled={busy} onClick={()=>downloadWav(M,setBusy,"full",undefined,true)}>{busy?"…":"⤓ WAV"}</button>
     </div>
     <div style={{fontSize:8,letterSpacing:".14em",color:acc,opacity:.5,fontFamily:SS,marginBottom:6}}>CHANGE THE FEEL</div>
     <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
@@ -1655,7 +1656,7 @@ function MusicScreen({mood,tick,speaking,onBack}){
         <div style={{fontSize:8,letterSpacing:".14em",color:m.acc,opacity:.55,fontFamily:SS,marginBottom:8}}>PIECES YOU LIKED</div>
         {saved.slice(0,12).map((s,k)=><div key={s.s} style={{display:"flex",gap:7,marginBottom:7}}>
           <button onClick={()=>{try{M.unlock();}catch(e){} M.playSaved(k);}} style={{flex:1,minWidth:0,textAlign:"left",padding:"11px 14px",borderRadius:14,background:"rgba(196,168,130,.07)",border:"1px solid rgba(196,168,130,.15)",color:"rgba(235,228,216,.85)",fontSize:14,fontFamily:SF,cursor:"pointer",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>♫ {s.t}</button>
-          <button disabled={dl>=0} onClick={()=>downloadWav(M,b=>setDl(b?k:-1),"full",k)} aria-label={"Download "+s.t} style={{...mbtn,opacity:dl>=0?.5:1,minWidth:64}}>{dl===k?"RENDERING…":"⤓ WAV"}</button>
+          <button disabled={dl>=0} onClick={()=>downloadWav(M,b=>setDl(b?k:-1),"full",k)} aria-label={"Download "+s.t} style={{...mbtn,opacity:dl>=0?.5:1,minWidth:64}}>{dl===k?"RENDERING…":"⤓ MP3"}</button>
         </div>)}
       </div>}
       <p style={{marginTop:24,fontSize:11,lineHeight:1.8,color:"rgba(196,168,130,.4)",fontFamily:SS}}>Every piece is composed on your device, from a fresh seed, so it won't repeat. You can also just ask Echo in chat — "play me something to calm down".</p>
