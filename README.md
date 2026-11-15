@@ -321,3 +321,8 @@ Decoded audio is raw floats, so all 24 banks together would need about 180 MB. B
 ## v26 — Measured mix balance and phrasing
 - **Mix check.** Every genre exemplar was rendered offline and its energy measured in six bands (sub, bass, low-mid, mid, upper-mid, air) plus loudness, peak and clipping. No genre clipped; levels sat between -13.6 and -17.9 dB RMS. The outliers were too much sub energy (afrobeats 40%, pop 34%, ambient 34%), mud at 250-500 Hz (amapiano 51%, blues 35%, pop 23%) and dull upper-mids (pop, amapiano, R&B). The master now has a per-style three-band correction (`STYLE_EQ`: low shelf below 70 Hz, a dip at 330 Hz, a presence shelf above 2.5 kHz; 80% of the measured correction). Re-measured: amapiano mud 51% -> 41%, blues 35% -> 25%, pop mud 23% -> 20% and upper-mids up, afrobeats sub 40% -> 34%. Measured on the synthesized sound; with samples the pattern was the same for the two genres I checked.
 - **Phrasing.** The lead now swells to the middle of each four-bar phrase and settles at its end, higher notes lean in, beats carry a little weight, quick notes are lighter, and the last note before a rest tails off. Guitar and clav chords are strummed a few milliseconds apart.
+
+## v27 — Phonk (Drift + Memphis)
+- New styles: **Drift Phonk** (default for "phonk", 134–148 BPM, half-time, rolling hats) and **Memphis Phonk** (68–80 BPM, murky, tape-like). Say "play phonk" / "play Memphis phonk".
+- New pitched `cowbell` lead instrument, distorted + sliding 808 (style-level `grit`), choir/ooh pads, hum/vox as the chopped-voice feel (synthesized — real Memphis vocal samples are not shipped).
+- Hand-written phonk exemplars (both score 100 on the critic); prompts, style picker and genre words updated.
