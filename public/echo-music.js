@@ -1631,6 +1631,19 @@
         else if (e.r === "perc" && (e.k === "hat" || e.k === "ride" || e.k === "tamb")) e.v *= (r % 4 === 0 ? 1.06 : r % 2 === 0 ? .96 : .86) * (pb === 3 ? 1.08 : 1);
         else if (e.r === "pad" || e.r === "comp" || e.r === "arp" || e.r === "lead") e.v *= swell;
       }
+      /* phrasing: a played melody breathes. Each four-bar phrase swells to its middle and settles at the end, higher notes lean in, beats carry a little weight, quick notes are lighter and the last note before a rest tails off */
+      if (!S.style.solo) {
+        var leads = ev.filter(function (x) { return x.r === "lead" && !x.vx && !x.ans && x.m !== undefined; }).sort(function (x, y) { return x.s - y.s; }), li;
+        for (li = 0; li < leads.length; li++) {
+          var L = leads[li], nxt = leads[li + 1], pos = (S.secBar % 4 + L.s / 16) / 4, f = .94 + .1 * Math.sin(Math.PI * pos);
+          f *= 1 + clamp((L.m - 69) / 70, -.07, .07); if (Math.round(L.s) % 4 === 0) f *= 1.04; if (L.d <= 1.5) f *= .92;
+          if (!nxt || nxt.s - (L.s + L.d) >= 4) f *= .93;
+          L.v *= f;
+        }
+        /* a guitar or clavinet strums: the notes of a chord land a few milliseconds apart, low to high */
+        var strum = /^(guitar|eguitar|dguitar|clav|harp)$/.test(S.pal.comp || ""), cs = ev.filter(function (x) { return x.r === "comp" && x.m !== undefined; }).sort(function (x, y) { return x.s - y.s || x.m - y.m; }), si = 0, ps = -1;
+        if (strum) for (li = 0; li < cs.length; li++) { if (Math.round(cs[li].s * 4) !== ps) { ps = Math.round(cs[li].s * 4); si = 0; } else si++; cs[li].s += si * .07; }
+      }
     }
     function nextBar() {
       var first = false;
@@ -1688,7 +1701,7 @@
       var bar = {
         idx: S.barNo, bpm: bpmB, stepDur: 60 / bpmB / 4, barDur: 60 / bpmB * 4, swing: S.style.swing, swing8: S.style.swing8 || 0, human: human, events: ev,
         lay: S.style.lay || 0,
-        mix: { wobble: S.style.wobble || 0, cut: cut, wet: wet, duck: S.style.duck, delay: S.style.delay, tex: S.tex, grit: S.recipe.grit, bright: S.recipe.bright, space: S.recipe.space, level: S.style.level || 1 },
+        mix: { wobble: S.style.wobble || 0, cut: cut, wet: wet, duck: S.style.duck, delay: S.style.delay, tex: S.tex, grit: S.recipe.grit, bright: S.recipe.bright, space: S.recipe.space, level: S.style.level || 1, eq: STYLE_EQ[S.styleName] || null },
         strips: PLAN && PLAN.mix || null, palette: voxPal(), kit: S.style.kit, sec: { kind: sec.kind, idx: S.secNo, bar: S.secBar, len: sec.bars, e: sec.e }, secStart: first, stage: S.stage, mood: spec.stages[S.stage].mood, style: S.styleName,
         key: { root: S.root, mode: S.mode }
       };
@@ -1751,6 +1764,8 @@
     edm:     { kickStart: 185, kickEnd: 46, kickDecay: .36, snareTone: 230, snareNoise: .8, snareDecay: .24, clapFreq: 1650, hatFreq: 9000, hatDecay: .04 }
   };
   /* mixer strips: level, reverb send, delay send, how much the kick ducks them */
+  /* master EQ per style, [sub dB below 70 Hz, mud dB at 330 Hz, presence dB above 2.5 kHz]. Measured by rendering every genre exemplar offline and comparing the share of energy in each band with a balanced target; 80% of the correction is applied. */
+  var STYLE_EQ = { pop: [-2.2, -1.8, 3.6], rock: [-1.8, 0.0, 0.0], blues: [0.0, -3.1, 0.3], jazz: [0.0, -1.4, 0.0], funk: [-1.6, 0.0, 0.0], hiphop: [-0.5, 0.0, 0.0], trap: [-1.5, 0.0, 0.0], afrobeats: [-2.8, 0.0, 1.1], amapiano: [0.0, -4.0, 3.6], lofi: [0.0, -1.3, 0.0], house: [0.0, 0.0, 1.1], rnb: [-1.7, 0.0, 2.2], ambient: [-2.2, 0.0, 0.2], acoustic: [0.0, -0.6, 0.0] };
   var STRIPS = {
     drums: { lvl: .46, rv: .05, dy: 0, duck: 0, hp: 36, pk: [4500, 1.5, .8], cmp: [-18, 3, .012, .12] }, hats: { lvl: .55, rv: .05, dy: 0, duck: 0, hp: 450 },
     bass: { lvl: .3, rv: 0, dy: 0, duck: 1, hp: 30, cmp: [-20, 3.5, .025, .16] }, pad: { lvl: .3, rv: .5, dy: 0, duck: 1, hp: 150, pk: [380, -2, .8] },
@@ -1886,7 +1901,9 @@
     /* tape wow and flutter: a short delay whose time wobbles slowly; depth is set per bar (zero for most styles) */
     var wow = ctx.createDelay(.05), wowLfo = ctx.createOscillator(), wowAmt = ctx.createGain();
     wow.delayTime.value = .012; wowLfo.frequency.value = .55; wowAmt.gain.value = 0; wowLfo.connect(wowAmt); wowAmt.connect(wow.delayTime); wowLfo.start(0); E.wowAmt = wowAmt;
-    premix.connect(wow); wow.connect(hp); hp.connect(tone);
+    var eqS = ctx.createBiquadFilter(), eqM = ctx.createBiquadFilter(), eqP = ctx.createBiquadFilter();
+    eqS.type = "lowshelf"; eqS.frequency.value = 70; eqM.type = "peaking"; eqM.frequency.value = 330; eqM.Q.value = .8; eqP.type = "highshelf"; eqP.frequency.value = 2500; eqS.gain.value = eqM.gain.value = eqP.gain.value = 0;
+    premix.connect(wow); wow.connect(hp); hp.connect(eqS); eqS.connect(eqM); eqM.connect(eqP); eqP.connect(tone);
     if (E.lite) {
       /* lite mode skips the per-part compressors, so one wider master compressor brings it up to the same loudness as full quality */
       var lc = ctx.createDynamicsCompressor(); lc.threshold.value = -34; lc.knee.value = 12; lc.ratio.value = 3.5; lc.attack.value = .01; lc.release.value = .18;
@@ -2395,6 +2412,7 @@
       var tc = Math.max(.05, bar.barDur / 3), maxCut = 5500 + mix.bright * 12500;
       E.bright = mix.bright; E.grit = mix.grit || 0; E.duckDepth = mix.duck || 0;
       E.wowAmt.gain.setTargetAtTime(mix.wobble || 0, t, .6);
+      var q = mix.eq || [0, 0, 0]; eqS.gain.setTargetAtTime(q[0], t, .5); eqM.gain.setTargetAtTime(q[1], t, .5); eqP.gain.setTargetAtTime(q[2], t, .5);
       trim.gain.setTargetAtTime((opts.trim || .4) * (mix.level || 1), t, .8);
       tone.frequency.setTargetAtTime(300 * Math.pow(maxCut / 300, clamp(mix.cut, 0, 1)), t, tc);
       var beat = 60 / bar.bpm; dl.delayTime.setTargetAtTime(beat * .75, t, .05); dr.delayTime.setTargetAtTime(beat * .75, t, .05);
