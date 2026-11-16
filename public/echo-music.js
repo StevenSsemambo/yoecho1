@@ -163,10 +163,10 @@
   /* styles: the rhythmic skeleton + instrument palette. Patterns are 16 steps (one bar of 16th notes). */
   var STYLE_LIST = ["afrobeats", "amapiano", "lofi", "house", "trap", "phonk", "memphis", "rnb", "ambient", "cinematic", "acoustic", "rocknroll", "rock", "blues", "jazz", "reggae", "funk", "pop", "hiphop"];
   var STYLES = {
-    afrobeats: { name: "Afrobeats", level: 1.08, lay: .35, bpm: [96, 108], swing: .22, arc: "groove", harm: 1, drums: 2, kit: "afro", feel: "synco",
-      drum: { kick: "x..x..x...x...x.", snare: "....x.......x...", clap: "....x.......x..x", hat: "x.xxx.x.x.xxx.x.", open: ".......x.......x", shaker: "xoxoxoxoxoxoxoxo", cLo: "..x...x...x..x..", cHi: "...x.x....x.x...", rim: "x..x..x.x..x..x.", rimV: .3 },
+    afrobeats: { name: "Afrobeats", level: 1.08, lay: .35, bpm: [96, 108], swing: .22, arc: "groove", harm: 1, drums: 2, kit: "afrob", feel: "synco",
+      drum: { kick: "x..x..x...x...x.", snare: "", clap: "....x.......x...", hat: "x.xxx.x.x.xxx.x.", open: ".......x.......x", shaker: "xoxoxoxoxoxoxoxo", cLo: "..x...x...x..x..", cHi: "...x.x....x.x...", rim: "..x..x..x..x..x.", rimV: .3 },
       comp: ["x..x..x...x..x..", "..x..x..x..x..x.", "x..x..x..x..x..."], bass: ["r..r..5...r..a..", "r..r..r...5..o..", "r.....r.r..5..a."], bassMax: 3,
-      pal: { pad: ["strings", "pad"], comp: ["guitar", "keys", "marimba"], lead: ["kalimba", "flute", "sax", "guitar", "marimba"], arp: ["kalimba", "pluck"], bass: ["pluck", "sub"] },
+      pal: { pad: ["pad", "strings", "choir"], comp: ["eguitar", "keys", "marimba", "guitar"], lead: ["eguitar", "kalimba", "keys", "sax", "marimba", "flute"], arp: ["kalimba", "pluck", "bells"], bass: ["sub", "808", "ebass"] },
       arp: { rate: 2, kind: "updown", gate: .8 }, duck: .22, delay: .22, tex: { vinyl: 0, rain: 0, air: 0 } },
     amapiano: { name: "Amapiano", level: 1.06, lay: .3, bpm: [110, 115], swing: .2, arc: "groove", harm: 2, drums: 2, kit: "ama", feel: "synco",
       drum: { kick: "x...x...x...x..x", snare: "", clap: "....x.......x...", hat: "x.x.x.x.x.x.x.x.", open: "..x...x...x...x.", shaker: "xoxoxoxoxoxoxoxo", cLo: "..x...x...x..x..", cHi: "...x..x.....x...", rim: "...x..x...x..x..", rimV: .3 },
@@ -1766,6 +1766,7 @@
     afro:    { kickStart: 150, kickEnd: 50, kickDecay: .32, snareTone: 330, snareNoise: .4, snareDecay: .11, clapFreq: 1700, hatFreq: 9500, hatDecay: .035 },
     heavy:   { kickStart: 130, kickEnd: 38, kickDecay: .8, snareTone: 170, snareNoise: .7, snareDecay: .28, clapFreq: 1100, hatFreq: 6500, hatDecay: .07 },
     phonk:   { kickStart: 125, kickEnd: 36, kickDecay: 1.0, snareTone: 240, snareNoise: .62, snareDecay: .16, clapFreq: 1250, hatFreq: 9500, hatDecay: .035 },
+    afrob:   { kickStart: 135, kickEnd: 48, kickDecay: .36, snareTone: 300, snareNoise: .5, snareDecay: .11, clapFreq: 1700, hatFreq: 10000, hatDecay: .03 },
     ama:     { kickStart: 100, kickEnd: 50, kickDecay: .4, snareTone: 250, snareNoise: .4, snareDecay: .12, clapFreq: 1250, hatFreq: 9800, hatDecay: .03 },
     trap:    { kickStart: 120, kickEnd: 34, kickDecay: 1.15, snareTone: 260, snareNoise: .6, snareDecay: .14, clapFreq: 1500, hatFreq: 10500, hatDecay: .03 },
     lofi:    { kickStart: 105, kickEnd: 50, kickDecay: .3, snareTone: 185, snareNoise: .32, snareDecay: .2, clapFreq: 950, hatFreq: 5200, hatDecay: .06 },
@@ -3222,13 +3223,13 @@
       Sx("outro", 4, .4, "Cm Ab Eb Bb", { lead: "sparse", drums: 1 })] };
 
   EX.afrobeats = { title: "Lagos Evening", key: "A", mode: "minor", bpm: 102, style: "afrobeats", moods: ["joy", "love", "hope"],
-    band: { pad: "pad", comp: "guitar", lead: "marimba", arp: "none", bass: "ebass" }, motif: { on: [0, 3, 6, 10], deg: [4, 4, 2, 0] },
+    band: { pad: "pad", comp: "keys", lead: "eguitar", arp: "none", bass: "sub" }, motif: { on: [0, 3, 6, 10], deg: [4, 4, 2, 0] },
     sections: [
       Sx("intro", 4, .4, "Am G F G", { lead: "none", drums: 1 }),
       Sx("verse", 8, .6, "Am G F G", { drums: 1, mel: N("0:0:4:3 0:3:2:1 0:6:0:2 0:10:2:2 0:12:0:4 1:0:1:3 1:3:3:1 1:6:1:2 1:10:3:2 1:12:1:4 2:0:5:3 2:3:3:1 2:6:0:2 2:10:3:2 2:12:5:4 3:0:6:3 3:3:4:1 3:6:1:2 3:10:4:2 3:12:6:4"),
-        bassline: B("0:0:R:3 0:3:R:1 0:6:5:2 0:10:R:2 0:14:a:2"), groove: { kick: "x.....x...x.....", rim: "....x.......x...", shaker: "xoxoxoxoxoxoxoxo", hat: "..x...x...x...x." } }),
+        bassline: B("0:0:R:3 0:3:R:3 0:6:5:3 0:10:R:2 0:14:a:2"), groove: { kick: "x..x..x...x.....", rim: "..x..x..x..x..x.", clap: "....x.......x...", shaker: "xoxoxoxoxoxoxoxo", hat: "..x...x...x...x." } }),
       Sx("chorus", 8, .9, "F G Am Am", { mel: N("0:0:7:3 0:3:7:1 0:6:5:2 0:10:3:2 0:12:5:4 1:0:6:3 1:3:8:1 1:6:6:2 1:10:4:2 1:12:6:4 2:0:9:3 2:3:7:1 2:6:9:2 2:10:7:2 2:12:9:4 3:0:7:4 3:6:5:2 3:8:2:8"),
-        bassline: B("0:0:R:3 0:3:R:1 0:6:5:2 0:8:8:2 0:10:R:2 0:14:a:2"), groove: { kick: "x.....x...x...x.", rim: "....x.......x...", clap: "....x.......x...", shaker: "xoxoxoxoxoxoxoxo", hat: "..x...x...x...x.", cHi: "...x.x....x.x..." } }),
+        bassline: B("0:0:R:3 0:3:R:3 0:6:5:3 0:10:R:2 0:12:8:2 0:14:a:2"), groove: { kick: "x..x..x...x...x.", rim: "..x..x..x..x..x.", clap: "....x.......x...", shaker: "xoxoxoxoxoxoxoxo", hat: "..x...x...x...x.", cHi: "...x.x....x.x..." } }),
       Sx("verse", 8, .65, "Am G F G", { drums: 1 }),
       Sx("chorus", 8, .95, "F G Am Am", {}),
       Sx("break", 4, .4, "Dm G F Em", { lead: "none", drums: 1 }),

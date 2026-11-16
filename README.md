@@ -333,3 +333,7 @@ Decoded audio is raw floats, so all 24 banks together would need about 180 MB. B
 - **DJ effects bus:** synthesized air horn, siren, laser, scratch, rewind, brake, snare roll, risers, impacts, crashes.
 - **Transitions:** `auto` (default; varies per handover), `blend` (EQ bass swap + riser + echo throw), `echo`, `filter`, `roll`, `brake`, `rewind`, `cut` (scratch), `quick`. Live performance between handovers: horns on drops, echo throws at phrase ends, filter lifts. Ask in chat: "echo out", "beat roll", "scratch", "rewind".
 - Honest limits: no real voice drops/shout-outs (no vocal samples), "brake" is a filter+pitch-fall imitation, not true tape-stop on the playing tracks.
+
+## v29 — Afrobeats retuned
+- Afrobeats no longer uses the vintage CR-78 drum-machine samples: it has its own punchy synthesized kit (`afrob`), tresillo-style rim/conga pattern, kick on 0-3-6-10 locked with the bass, clap on 2 and 4, 16th shaker.
+- Instruments: clean electric guitar and electric-piano comping, guitar/kalimba/keys/sax leads, sub/808 bass with slides (instead of the plain pluck). Exemplar rebuilt around that band.
