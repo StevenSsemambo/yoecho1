@@ -337,3 +337,9 @@ Decoded audio is raw floats, so all 24 banks together would need about 180 MB. B
 ## v29 — Afrobeats retuned
 - Afrobeats no longer uses the vintage CR-78 drum-machine samples: it has its own punchy synthesized kit (`afrob`), tresillo-style rim/conga pattern, kick on 0-3-6-10 locked with the bass, clap on 2 and 4, 16th shaker.
 - Instruments: clean electric guitar and electric-piano comping, guitar/kalimba/keys/sax leads, sub/808 bass with slides (instead of the plain pluck). Exemplar rebuilt around that band.
+
+## v30 — Research pass: Fela / Burna Boy / Kabza-Maphorisa amapiano
+- New **Afrobeat (Fela)** style (say "Fela", "highlife", "classic afrobeat"): modal vamps, interlocking two-bar guitar/bass phrases, sax/brass riffs, organ, congas + shekere, long sections (16-bar grooves, solo), 104–118 BPM. Exemplar "Lagos Vamp".
+- **Afrobeats (Burna Boy style)**: percussion pushed forward (hats strip up), lean bass (high-pass raised to ~42 Hz), punchy synthesized kit.
+- **Amapiano** now follows the researched structure: 8-bar kick-less style intro (shaker, rim, keys, pad), soft four-on-the-floor kick, 16th shaker + off-beat open hats, e-piano 9th chords, log drum answering in two-bar phrases, main log-drum section with the piano dropped, breakdown, DJ-friendly outro; marimba/bells lead.
+Sources: producelikeapro (Fela), Sound On Sound (Burna Boy), Roland/beatstorapon + Native Instruments blogs (amapiano).

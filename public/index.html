@@ -830,7 +830,7 @@ function selfKnowledge(){
   return `YOUR OWN BODY AND ABILITIES (true and current — speak about them naturally, in the first person, whenever it is relevant or asked):
 - You HAVE a face and upper body: a 3D animated avatar. In Voice mode the person can switch on FACE TO FACE, where you appear with a face and torso, your lips move in time with your speech and your expression follows your mood. They can choose your look (avatar, skin tone) and your voice style. ${face?"Right now they ARE talking to you face to face: they can see you and your expressions.":"If they ask what you look like or whether you have a face, tell them yes and that face to face is in Voice mode."}
 - You HAVE a voice: you speak your replies aloud, in a tone that follows your mood, and you listen through their microphone.
-- You CAN play music: you compose original music live, on their device, in styles like afrobeats, amapiano, lo-fi, R&B, house, trap, drift phonk, Memphis phonk, ambient, cinematic, acoustic, rock and roll, rock, blues, jazz, reggae, funk, pop and hip-hop (each with its own real band: electric guitars, upright or electric bass, organ, horns, piano, proper drum grooves), with instruments such as piano, guitar, electric guitar, sax, violin, kalimba, bells and drums; you can play a drum solo;  you can also do DJ mixes and solo instrument performances. In the main Chat they just ask and you start it; there is also a Music screen in the menu. You only play music when they ask.${music}
+- You CAN play music: you compose original music live, on their device, in styles like afrobeats, Fela-style Afrobeat, amapiano, lo-fi, R&B, house, trap, drift phonk, Memphis phonk, ambient, cinematic, acoustic, rock and roll, rock, blues, jazz, reggae, funk, pop and hip-hop (each with its own real band: electric guitars, upright or electric bass, organ, horns, piano, proper drum grooves), with instruments such as piano, guitar, electric guitar, sax, violin, kalimba, bells and drums; you can play a drum solo;  you can also do DJ mixes and solo instrument performances. In the main Chat they just ask and you start it; there is also a Music screen in the menu. You only play music when they ask.${music}
 - You KNOW the current date and time (see TIME AWARENESS) and you can set REMINDERS: they tell you what and when, and once they turn notifications on (menu → Reminders) you send a push notification to their phone at the right time. You can also send gentle check-in notifications now and then if they switch that on there. You are a friend who remembers things for them.
 - You remember and reflect: anchors (significant moments), the people in their life, journal insights, patterns and beliefs, and you have Wiser Self, Journal, Debates, Tutor and Echo State modes.
 Never claim to be text-only, bodiless, voiceless or unable to play music. Do not claim abilities beyond these: you cannot browse the web or stream songs from Spotify (your music is composed by you, not streamed), and you cannot see through their camera.`;
@@ -972,7 +972,7 @@ function loadEchoMusic(){
   if(_musicPromise) return _musicPromise;
   _musicPromise=new Promise((res,rej)=>{
     const el=document.createElement("script");
-    el.src="/echo-music.js?v=31"; el.async=true;
+    el.src="/echo-music.js?v=32"; el.async=true;
     el.onload=()=>{ if(window.EchoMusic){ window.dispatchEvent(new Event("echomusic-ready")); res(window.EchoMusic); } else rej(new Error("music engine missing")); };
     el.onerror=()=>rej(new Error("could not load the music engine"));
     document.head.appendChild(el);
@@ -989,9 +989,9 @@ function warmMusicSamples(){
   }catch(e){}
 }
 if(document.readyState==="complete") warmMusicSamples(); else window.addEventListener("load",warmMusicSamples,{once:true});
-const MUSIC_STYLES=[["afrobeats","Afrobeats"],["amapiano","Amapiano"],["lofi","Lo-fi"],["house","House"],["trap","Trap"],["phonk","Drift Phonk"],["memphis","Memphis Phonk"],["rnb","R&B"],["ambient","Ambient"],["cinematic","Cinematic"],["acoustic","Acoustic"],["rocknroll","Rock and Roll"],["rock","Rock"],["blues","Blues"],["jazz","Jazz"],["reggae","Reggae"],["funk","Funk"],["pop","Pop"],["hiphop","Hip-hop"]];
+const MUSIC_STYLES=[["afrobeats","Afrobeats"],["afrobeat","Afrobeat (Fela)"],["amapiano","Amapiano"],["lofi","Lo-fi"],["house","House"],["trap","Trap"],["phonk","Drift Phonk"],["memphis","Memphis Phonk"],["rnb","R&B"],["ambient","Ambient"],["cinematic","Cinematic"],["acoustic","Acoustic"],["rocknroll","Rock and Roll"],["rock","Rock"],["blues","Blues"],["jazz","Jazz"],["reggae","Reggae"],["funk","Funk"],["pop","Pop"],["hiphop","Hip-hop"]];
 // genre words people actually say -> engine style id
-const GENRE_WORDS=[[/\bmemphis\b/,"memphis"],[/\bphonk\b/,"phonk"],[/\b(rock\s*(?:and|n|'n'|&)\s*roll|rock\s*n\s*roll|rock-?n-?roll|rockabilly|elvis|chuck berry|1950s|fifties)\b/,"rocknroll"],[/\b(hard rock|classic rock|rock|metal|punk|grunge|guitar band)\b/,"rock"],[/\bblues(?:y)?\b/,"blues"],[/\b(jazz(?:y)?|bebop|swing|bossa)\b/,"jazz"],[/\b(reggae|ska|dancehall)\b/,"reggae"],[/\b(funk(?:y)?|disco)\b/,"funk"],[/\bpop\b/,"pop"],[/\b(hip[- ]?hop|boom ?bap|rap)\b/,"hiphop"],[/\bafro ?beats?\b/,"afrobeats"],[/\bamapiano\b/,"amapiano"],[/\blo-?fi\b/,"lofi"],[/\bhouse\b/,"house"],[/\btrap\b/,"trap"],[/\b(r&b|rnb)\b/,"rnb"],[/\bambient\b/,"ambient"],[/\bcinematic\b/,"cinematic"],[/\bacoustic\b/,"acoustic"]];
+const GENRE_WORDS=[[/\b(fela|fela kuti|tony allen|highlife|classic afrobeat|70s afrobeat|afrobeat jam)\b/,"afrobeat"],[/\bmemphis\b/,"memphis"],[/\bphonk\b/,"phonk"],[/\b(rock\s*(?:and|n|'n'|&)\s*roll|rock\s*n\s*roll|rock-?n-?roll|rockabilly|elvis|chuck berry|1950s|fifties)\b/,"rocknroll"],[/\b(hard rock|classic rock|rock|metal|punk|grunge|guitar band)\b/,"rock"],[/\bblues(?:y)?\b/,"blues"],[/\b(jazz(?:y)?|bebop|swing|bossa)\b/,"jazz"],[/\b(reggae|ska|dancehall)\b/,"reggae"],[/\b(funk(?:y)?|disco)\b/,"funk"],[/\bpop\b/,"pop"],[/\b(hip[- ]?hop|boom ?bap|rap)\b/,"hiphop"],[/\bafro ?beats?\b/,"afrobeats"],[/\bamapiano\b/,"amapiano"],[/\blo-?fi\b/,"lofi"],[/\bhouse\b/,"house"],[/\btrap\b/,"trap"],[/\b(r&b|rnb)\b/,"rnb"],[/\bambient\b/,"ambient"],[/\bcinematic\b/,"cinematic"],[/\bacoustic\b/,"acoustic"]];
 function genreIn(t){ for(const [re,id] of GENRE_WORDS) if(re.test(t)) return id; return null; }
 const MUSIC_MOODS=["joy","hope","love","neutral","sadness","fear","anger","confusion"];
 function extractMusic(raw){
@@ -1039,7 +1039,7 @@ function sniffMusic(text,active){
   // DJ mix: "play me a DJ mix", "a 30 minute afrobeats mix", "non-stop party set"
   if(/\b(dj (mix|set)|mixtape|non-?stop|(?:a|an|the|me|some|your|\d+[- ]?(?:min\w*|hours?|hrs?)) (?:[a-z-]+ ){0,3}(?:mix|dj set))\b/.test(t)&&/\b(play|put on|give|make|start|i (want|need|wanna)|can you|do|spin|let'?s have|let me hear)\b/.test(t)){
     const c={cmd:"mix",styles:[]};
-    for(const [id,nm] of MUSIC_STYLES){ if(t.includes(nm.toLowerCase())||t.includes(id)||(id==="lofi"&&/\b(chill|study|lo ?fi)\b/.test(t))) c.styles.push(id); }
+    for(const [id,nm] of MUSIC_STYLES){ if(id==="afrobeat"&&!/\b(fela|highlife|classic afrobeat)\b/.test(t)) continue; if(t.includes(nm.toLowerCase())||t.includes(id)||(id==="lofi"&&/\b(chill|study|lo ?fi)\b/.test(t))) c.styles.push(id); }
     if(/\b(party|club|dance|gym|workout|hype)\b/.test(t)&&!c.styles.length) c.styles=["afrobeats","amapiano","house"];
     if(/\b(chill|relax|sleep|study|calm)\b/.test(t)&&!c.styles.length) c.styles=["lofi","rnb","acoustic","ambient"];
     if(/\b(chill|relax|sleep|study|calm)\b/.test(t)) c.shape="chill"; else if(/\b(build|warm ?up|start slow)\b/.test(t)) c.shape="warmup"; else if(/\b(party|club|hype|workout|gym|peak)\b/.test(t)) c.shape="peak";
@@ -1060,7 +1060,7 @@ function sniffMusic(text,active){
     if(g&&!/\b(next|skip|volume|louder|quieter)\b/.test(t)&&(/\b(play|put on|let me hear)\b[^.!?]{0,25}\b(rock|roll|blues|jazz|reggae|funk|pop|hip|rap|metal|punk|ska|disco|afro|amapiano|lo-?fi|house|trap|phonk|memphis|r&b|rnb|ambient|cinematic|acoustic|swing|elvis)/.test(t)||(/\b(music|song|tune|beat|jam|track|vibe)\b/.test(t)&&/\b(give|want|need|wanna|some|can you|could you|make|compose|start)\b/.test(t)))) return {mood:null,style:g}; }
   if(/\b(play|put on|start|make|compose|give me|i (want|need|wanna|would like)|can you play)\b[^.!?]{0,40}\b(music|song|beat|tune|something to (listen|vibe|relax|dance))\b|\bmusic (please|for me)\b|\bplay (me )?something\b/.test(t)){
     const c={mood:null};
-    for(const [id,nm] of MUSIC_STYLES){ if(t.includes(nm.toLowerCase())||t.includes(id)||(id==="lofi"&&/\b(chill|study)\b/.test(t))){ c.style=id; break; } }
+    for(const [id,nm] of MUSIC_STYLES){ if(id==="afrobeat"&&!/\b(fela|highlife|classic afrobeat)\b/.test(t)) continue; if(t.includes(nm.toLowerCase())||t.includes(id)||(id==="lofi"&&/\b(chill|study)\b/.test(t))){ c.style=id; break; } }
     if(/\b(calm|relax|sleep|unwind|settle)\b/.test(t)) c.intent="calm";
     else if(/\b(cheer|lift|pick me up|happy)\b/.test(t)) c.intent="lift";
     return c;
@@ -1075,7 +1075,7 @@ function musicTaste(){
 const PLAN_SYSTEM=`You are a world-class music producer, arranger and composer. Given a request, write a COMPOSITION PLAN as ONE JSON object and nothing else (no prose, no markdown fences). A synthesizer engine will perform it with a real band feel, so write like a professional arranger.
 
 SCHEMA
-{"title":"2-3 words","key":"E","mode":"major|minor|dorian|mixolydian|lydian|phrygian","bpm":50-150,"style":"rocknroll|rock|blues|jazz|reggae|funk|pop|hiphop|afrobeats|amapiano|lofi|house|trap|phonk|memphis|rnb|ambient|cinematic|acoustic",
+{"title":"2-3 words","key":"E","mode":"major|minor|dorian|mixolydian|lydian|phrygian","bpm":50-150,"style":"rocknroll|rock|blues|jazz|reggae|funk|pop|hiphop|afrobeats|afrobeat|amapiano|lofi|house|trap|phonk|memphis|rnb|ambient|cinematic|acoustic",
 "band":{"pad":"…|none","comp":"…","lead":"…","arp":"…|none","bass":"…","ans":"…|none"},
 "motif":{"on":[0,3,6,10],"deg":[4,5,4,2]},
 "sections":[{"kind":"intro|verse|prechorus|chorus|solo|bridge|break|build|drop|outro","bars":8,"energy":0.1-1,"chords":["Em7","A7",…],"lead":"none|sparse|call|theme|varied","drums":0|1|2,"bass":true,"comp":true,"arp":false}]}
