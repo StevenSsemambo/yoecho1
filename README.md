@@ -326,3 +326,10 @@ Decoded audio is raw floats, so all 24 banks together would need about 180 MB. B
 - New styles: **Drift Phonk** (default for "phonk", 134–148 BPM, half-time, rolling hats) and **Memphis Phonk** (68–80 BPM, murky, tape-like). Say "play phonk" / "play Memphis phonk".
 - New pitched `cowbell` lead instrument, distorted + sliding 808 (style-level `grit`), choir/ooh pads, hum/vox as the chopped-voice feel (synthesized — real Memphis vocal samples are not shipped).
 - Hand-written phonk exemplars (both score 100 on the critic); prompts, style picker and genre words updated.
+
+## v28 — Amapiano rebuilt, DJ mixes with a real DJ rack
+- **Why amapiano sounded wrong:** it shared the "afro" kit, which played samples of a 1978 Roland CR-78 rhythm box, and its log drum was a plain sine bleep. Amapiano now has its own soft synthesized kit (`ama`), a new pitched woody log drum with slides between notes (also tuned an octave higher, 73–138 Hz, so it speaks on phone speakers), a 3-3-2 rim/percussion pattern, off-beat open hats, 16th shaker, swing .2, 110–115 BPM, and a longer layered intro in the exemplar.
+- **DJ rack (per track):** resonant low-pass for filter sweeps, a gate for beat rolls / stutters / hard cuts, a tempo-synced echo whose tail outlives the dry signal, high-pass bumps.
+- **DJ effects bus:** synthesized air horn, siren, laser, scratch, rewind, brake, snare roll, risers, impacts, crashes.
+- **Transitions:** `auto` (default; varies per handover), `blend` (EQ bass swap + riser + echo throw), `echo`, `filter`, `roll`, `brake`, `rewind`, `cut` (scratch), `quick`. Live performance between handovers: horns on drops, echo throws at phrase ends, filter lifts. Ask in chat: "echo out", "beat roll", "scratch", "rewind".
+- Honest limits: no real voice drops/shout-outs (no vocal samples), "brake" is a filter+pitch-fall imitation, not true tape-stop on the playing tracks.

@@ -168,8 +168,8 @@
       comp: ["x..x..x...x..x..", "..x..x..x..x..x.", "x..x..x..x..x..."], bass: ["r..r..5...r..a..", "r..r..r...5..o..", "r.....r.r..5..a."], bassMax: 3,
       pal: { pad: ["strings", "pad"], comp: ["guitar", "keys", "marimba"], lead: ["kalimba", "flute", "sax", "guitar", "marimba"], arp: ["kalimba", "pluck"], bass: ["pluck", "sub"] },
       arp: { rate: 2, kind: "updown", gate: .8 }, duck: .22, delay: .22, tex: { vinyl: 0, rain: 0, air: 0 } },
-    amapiano: { name: "Amapiano", level: 1.06, lay: .3, bpm: [108, 114], swing: .15, arc: "groove", harm: 2, drums: 2, kit: "afro", feel: "synco",
-      drum: { kick: "x...x...x...x...", snare: "", clap: "....x.......x...", hat: "x.oxo.xox.oxo.xo", open: "..x...x...x...x.", shaker: "xoxoxoxoxoxoxoxo", cLo: "", cHi: "" },
+    amapiano: { name: "Amapiano", level: 1.06, lay: .3, bpm: [110, 115], swing: .2, arc: "groove", harm: 2, drums: 2, kit: "ama", feel: "synco",
+      drum: { kick: "x...x...x...x..x", snare: "", clap: "....x.......x...", hat: "x.x.x.x.x.x.x.x.", open: "..x...x...x...x.", shaker: "xoxoxoxoxoxoxoxo", cLo: "..x...x...x..x..", cHi: "...x..x.....x...", rim: "...x..x...x..x..", rimV: .3 },
       comp: ["x..x..x...x..x.x", "..x..x..x..x.x..", "x.....x..x.x...."], bass: ["r..r..r...r..5..", "r.....5.r..r.o..", "r..r.....r..a.5."], bassMax: 3,
       pal: { pad: ["pad", "strings"], comp: ["piano", "keys"], lead: ["piano", "sax", "flute", "kalimba", "synth"], arp: ["bells", "pluck"], bass: ["log", "sub"] },
       arp: { rate: 2, kind: "alberti", gate: .7 }, duck: .3, delay: .15, tex: { vinyl: 0, rain: 0, air: 0 } },
@@ -1039,7 +1039,7 @@
     flute: [60, 96], brass: [40, 80], horns: [40, 82], sax: [49, 81], violin: [55, 100], synth: [36, 96] };
   function noteName(m) { return NOTE_NAMES[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1); }
   var COMP_CENTER = { eguitar: 55, dguitar: 48, hammond: 58, horns: 60, clav: 66, lguitar: 60, guitar: 57, piano: 62, keys: 62, organ: 58, marimba: 64, strings: 58, pad: 58 };
-  var BASS_LOW = { ebass: 28, upbass: 28, sub: 31, "808": 31, log: 33, pluck: 33, synthbass: 33 };
+  var BASS_LOW = { ebass: 28, upbass: 28, sub: 31, "808": 31, log: 36, pluck: 33, synthbass: 33 };
   var BASE_VEL = { pad: .55, comp: .7, lead: .85, arp: .55, bass: .9 };
 
   function Composer(brief, seed) {
@@ -1424,7 +1424,7 @@
     }
     /* plays the bass line the composer wrote: chord-relative tones, locked to the bar, with the weight on the downbeat and a push into the next chord */
     function bassLineBar(sec, chord, rootM, nextM, vb) {
-      var out = [], notes = sec.bl[S.secBar % sec.blBars] || [], third = chordThird(chord), bp = S.pal.bass, glideOk = bp === "synthbass" || bp === "sub" || bp === "808", prevN = null, max = Math.max(4, S.style.bassMax || 16);
+      var out = [], notes = sec.bl[S.secBar % sec.blBars] || [], third = chordThird(chord), bp = S.pal.bass, glideOk = bp === "synthbass" || bp === "sub" || bp === "808" || bp === "log", prevN = null, max = Math.max(4, S.style.bassMax || 16);
       for (var k = 0; k < notes.length; k++) {
         var nt = notes[k], t = nt.t, note;
         if (t === "a" || t === "a-" || t === "a+") note = t === "a+" ? nextM + 1 : t === "a-" ? nextM - 1 : (nextM > rootM ? nextM - 1 : nextM + 1);
@@ -1451,14 +1451,14 @@
         return out;
       }
       var steps = []; for (var s = 0; s < 16; s++) if (pat.charAt(s) !== ".") steps.push(s);
-      var bp = S.pal.bass, glideOk = bp === "synthbass" || bp === "sub" || bp === "808", prevN = null;
+      var bp = S.pal.bass, glideOk = bp === "synthbass" || bp === "sub" || bp === "808" || bp === "log", prevN = null;
       for (var j = 0; j < steps.length; j++) {
         var st = steps[j], ch = pat.charAt(st), note = rootM;
         if (ch === "5") note = rootM + 7; else if (ch === "o") note = rootM + 12; else if (ch === "b") note = rootM + 10; else if (ch === "3") note = rootM + third; else if (ch === "6") note = rootM + 9;
         else if (ch === "a") note = lastOfChord ? (nextM > rootM ? nextM - 1 : nextM + 1) : rootM + 7;
         var len = (j < steps.length - 1 ? steps[j + 1] : 16) - st;
         var evb = { s: st, r: "bass", i: S.pal.bass, m: note, d: Math.max(1, Math.min(len, max) * .92), v: vb * (j === 0 ? 1 : .82), p: 1 };
-        if (glideOk && prevN !== null && note !== prevN && Math.abs(note - prevN) <= (bp === "808" ? 7 : 5) && rng.chance(bp === "808" ? (S.style.grit ? .38 : .22) : .1)) evb.gl = prevN - note;
+        if (glideOk && prevN !== null && note !== prevN && Math.abs(note - prevN) <= (bp === "808" || bp === "log" ? 7 : 5) && rng.chance(bp === "808" ? (S.style.grit ? .38 : .22) : bp === "log" ? .3 : .1)) evb.gl = prevN - note;
         out.push(evb); prevN = note;
       }
       return out;
@@ -1766,6 +1766,7 @@
     afro:    { kickStart: 150, kickEnd: 50, kickDecay: .32, snareTone: 330, snareNoise: .4, snareDecay: .11, clapFreq: 1700, hatFreq: 9500, hatDecay: .035 },
     heavy:   { kickStart: 130, kickEnd: 38, kickDecay: .8, snareTone: 170, snareNoise: .7, snareDecay: .28, clapFreq: 1100, hatFreq: 6500, hatDecay: .07 },
     phonk:   { kickStart: 125, kickEnd: 36, kickDecay: 1.0, snareTone: 240, snareNoise: .62, snareDecay: .16, clapFreq: 1250, hatFreq: 9500, hatDecay: .035 },
+    ama:     { kickStart: 100, kickEnd: 50, kickDecay: .4, snareTone: 250, snareNoise: .4, snareDecay: .12, clapFreq: 1250, hatFreq: 9800, hatDecay: .03 },
     trap:    { kickStart: 120, kickEnd: 34, kickDecay: 1.15, snareTone: 260, snareNoise: .6, snareDecay: .14, clapFreq: 1500, hatFreq: 10500, hatDecay: .03 },
     lofi:    { kickStart: 105, kickEnd: 50, kickDecay: .3, snareTone: 185, snareNoise: .32, snareDecay: .2, clapFreq: 950, hatFreq: 5200, hatDecay: .06 },
     rock:    { kickStart: 140, kickEnd: 46, kickDecay: .42, snareTone: 195, snareNoise: .85, snareDecay: .26, clapFreq: 1300, hatFreq: 7200, hatDecay: .05 },
@@ -1938,9 +1939,28 @@
     }
     glue.connect(trim); trim.connect(lim); lim.connect(clip);
     /* DJ high-pass: sits last in the chain so a whole piece can have its bass swept out or in during a mix */
-    var djhp = ctx.createBiquadFilter(); djhp.type = "highpass"; djhp.frequency.value = 10; djhp.Q.value = .7; clip.connect(djhp); djhp.connect(E.out);
+    var djhp = ctx.createBiquadFilter(); djhp.type = "highpass"; djhp.frequency.value = 10; djhp.Q.value = .7; clip.connect(djhp);
+    /* DJ rack after the high-pass: a resonant low-pass (filter sweeps), a gate (beat rolls, stutters, hard cuts) and a tempo-synced echo whose tail outlives the dry signal */
+    var djlp = ctx.createBiquadFilter(); djlp.type = "lowpass"; djlp.frequency.value = 22000; djlp.Q.value = .7;
+    var djgate = ctx.createGain(); djgate.gain.value = 1;
+    var djsend = ctx.createGain(), djdl = ctx.createDelay(2.5), djfb = ctx.createGain(), djef = ctx.createBiquadFilter(), djeo = ctx.createGain();
+    djsend.gain.value = 0; djdl.delayTime.value = .4; djfb.gain.value = .5; djef.type = "lowpass"; djef.frequency.value = 4200; djeo.gain.value = .9;
+    djhp.connect(djlp); djlp.connect(djgate); djgate.connect(E.out);
+    djlp.connect(djsend); djsend.connect(djdl); djdl.connect(djef); djef.connect(djfb); djfb.connect(djdl); djef.connect(djeo); djeo.connect(E.out);
     E.djSet = function (f, t) { djhp.frequency.cancelScheduledValues(0); djhp.frequency.setValueAtTime(Math.max(10, f), t); };
     E.djSweep = function (t0, dur, from, to) { var f = djhp.frequency; f.cancelScheduledValues(t0); f.setValueAtTime(Math.max(10, from), t0); f.exponentialRampToValueAtTime(Math.max(10, to), t0 + dur); };
+    E.djLP = function (t0, dur, from, to, q) { var f = djlp.frequency; f.cancelScheduledValues(t0); f.setValueAtTime(clamp(from, 60, 22000), t0); f.exponentialRampToValueAtTime(clamp(to, 60, 22000), t0 + Math.max(.02, dur)); if (q !== undefined) { djlp.Q.cancelScheduledValues(t0); djlp.Q.setValueAtTime(q, t0); } };
+    E.djLPset = function (f, t, q) { djlp.frequency.cancelScheduledValues(t); djlp.frequency.setValueAtTime(clamp(f, 60, 22000), t); djlp.Q.cancelScheduledValues(t); djlp.Q.setValueAtTime(q || .7, t); };
+    E.djGateSet = function (t, v, ramp) { var g = djgate.gain; g.cancelScheduledValues(t); g.setValueAtTime(Math.max(.0001, g.value), t); g.linearRampToValueAtTime(Math.max(.0001, v), t + (ramp || .005)); };
+    /* beat roll / stutter: the gate chops the signal faster and faster; rates are notes per beat for each equal slice of [t0, t1] */
+    E.djChop = function (t0, t1, beat, rates, endV) {
+      var g = djgate.gain, seg = (t1 - t0) / rates.length, i, tt, st; g.cancelScheduledValues(t0); g.setValueAtTime(1, t0);
+      for (i = 0; i < rates.length; i++) { st = beat / rates[i]; for (tt = t0 + i * seg; tt < t0 + (i + 1) * seg - 1e-3; tt += st) { g.setValueAtTime(1, tt); g.setValueAtTime(.0001, tt + st * .55); } }
+      g.setValueAtTime(Math.max(.0001, endV === undefined ? .0001 : endV), t1);
+    };
+    E.djEchoOn = function (t, beat, mult, fb, lvl) { djdl.delayTime.setValueAtTime(clamp(beat * mult, .05, 2.4), t); djfb.gain.setValueAtTime(clamp(fb, 0, .8), t); djsend.gain.cancelScheduledValues(t); djsend.gain.setValueAtTime(djsend.gain.value, t); djsend.gain.linearRampToValueAtTime(lvl, t + .03); };
+    E.djEchoOff = function (t, ramp) { djsend.gain.cancelScheduledValues(t); djsend.gain.setValueAtTime(Math.max(.0001, djsend.gain.value), t); djsend.gain.linearRampToValueAtTime(0, t + (ramp || .04)); };
+    E.djBump = function (t0, dur, hz) { var f = djhp.frequency; f.setValueAtTime(10, t0); f.exponentialRampToValueAtTime(hz, t0 + dur * .8); f.setValueAtTime(10, t0 + dur); };
     /* equal-power level curve for crossfades (up: 0->1, down: 1->0) */
     E.xfade = function (t0, dur, up) {
       var n = 48, c = new Float32Array(n), q; for (q = 0; q < n; q++) { var x = q / (n - 1); c[q] = up ? Math.sin(x * Math.PI / 2) : Math.cos(x * Math.PI / 2); }
@@ -2251,9 +2271,19 @@
       g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(.7 * v, t + .01); g.gain.setValueAtTime(.7 * v, t + Math.max(.02, len * .6)); g.gain.exponentialRampToValueAtTime(.0001, t + len + .06);
       o1.connect(lp); lp.connect(g); o2.connect(g); o3.connect(g3); g3.connect(g); g.connect(o);
     };
+    /* log drum: a pitched, woody "bwoom". A sine body that drops a few semitones fast, a hollow knock an octave and a bit up, a click, and a tail; played as a bass line, it slides into notes */
     INST.log = function (E, f, t, d, v, o) {
-      var lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 1200; lp.connect(o);
-      E.tone(t, "sine", f * 1.55, f, .05, .95 * v, .45, lp); E.tone(t, "triangle", f * 2, f * 2, .01, .2 * v, .16, lp);
+      var dur = clamp(d * 1.1, .28, .95), end = t + dur, os = ctx.createOscillator(), g = ctx.createGain(), h = ctx.createOscillator(), hg = ctx.createGain();
+      os.type = "sine";
+      if (E.curGl) { os.frequency.setValueAtTime(f * Math.pow(2, E.curGl / 12), t); os.frequency.exponentialRampToValueAtTime(f, t + .09); }
+      else { os.frequency.setValueAtTime(f * 1.32, t); os.frequency.exponentialRampToValueAtTime(f, t + .05); }
+      g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(.95 * v, t + .004); g.gain.exponentialRampToValueAtTime(.45 * v, t + .12); g.gain.exponentialRampToValueAtTime(.0001, end);
+      h.type = "triangle"; h.frequency.setValueAtTime(f * 2.04, t); h.frequency.exponentialRampToValueAtTime(f * 1.98, t + .08); hg.gain.setValueAtTime(.0001, t); hg.gain.linearRampToValueAtTime(.4 * v, t + .004); hg.gain.exponentialRampToValueAtTime(.0001, t + dur * .55);
+      var sh = ctx.createWaveShaper(), shg = ctx.createGain(), bp = ctx.createBiquadFilter(); sh.curve = satCurve; shg.gain.value = .22;
+      bp.type = "bandpass"; bp.frequency.value = clamp(f * 3.1, 220, 700); bp.Q.value = 2.2;
+      os.connect(g); g.connect(o); g.connect(sh); sh.connect(shg); shg.connect(o); h.connect(hg); hg.connect(o); hg.connect(bp); bp.connect(o);
+      os.start(t); h.start(t); os.stop(end + .05); h.stop(end + .05);
+      if (!E.lite) E.noise(t, .03, "bandpass", clamp(f * 8, 600, 1800), 1.4, .16 * v, .018, o);
     };
 
 
@@ -2763,7 +2793,71 @@
 
   /* ═══════════════ DJ mix ═══════════════ */
   var MIX_DEFAULT_STYLES = ["afrobeats", "amapiano", "house"];
-  var MIX_TRANS = { blend: 16, quick: 8, cut: 2 };
+  var MIX_TRANS = { auto: 16, blend: 16, quick: 8, cut: 2, echo: 16, filter: 16, roll: 16, brake: 16, rewind: 16 };
+  /* DJ effect voices (the things a DJ throws over a mix): all synthesized on the spot, on their own bus beside the tracks */
+  function DJFX(ctx, out) {
+    var F = {}, nb = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 2), ctx.sampleRate), nd = nb.getChannelData(0), i;
+    for (i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    var bus = ctx.createGain(); bus.gain.value = .5; bus.connect(out);
+    var sat = ctx.createWaveShaper(), sc = new Float32Array(512); for (i = 0; i < 512; i++) { var x = i / 255.5 - 1; sc[i] = Math.tanh(x * 2.4) * .8; } sat.curve = sc;
+    function noise(t, dur, type, f0, f1, q, peak, atk) {
+      var s = ctx.createBufferSource(), fl = ctx.createBiquadFilter(), g = ctx.createGain(); s.buffer = nb; s.loop = true; fl.type = type; fl.Q.value = q;
+      fl.frequency.setValueAtTime(f0, t); if (f1 !== f0) fl.frequency.exponentialRampToValueAtTime(Math.max(40, f1), t + dur);
+      g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(peak, t + Math.min(atk || .01, dur * .5)); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+      s.connect(fl); fl.connect(g); g.connect(bus); s.start(t, Math.random()); s.stop(t + dur + .05);
+    }
+    function osc(t, dur, type, f0, f1, peak, atk, dst) {
+      var o = ctx.createOscillator(), g = ctx.createGain(); o.type = type; o.frequency.setValueAtTime(f0, t); if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+      g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(peak, t + (atk || .005)); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+      o.connect(g); g.connect(dst || bus); o.start(t); o.stop(t + dur + .05); return o;
+    }
+    F.sweepUp = function (t, dur, v) { noise(t, dur, "bandpass", 300, 9500, 1.3, .42 * v, dur * .95); };
+    F.sweepDown = function (t, dur, v) { noise(t, dur, "bandpass", 9000, 350, 1.1, .4 * v, .02); };
+    F.impact = function (t, v) { osc(t, 1.6, "sine", 64, 30, .85 * v, .004); noise(t, 1.3, "lowpass", 500, 140, .7, .5 * v, .004); };
+    F.crash = function (t, v) { noise(t, 1.8, "highpass", 3400, 3400, .6, .34 * v, .004); };
+    /* air horn: a stack of detuned saws through a clipper, three short blasts and a long one that droops */
+    F.horn = function (t, v, beat) {
+      var b = beat || .5, hits = [[0, .2], [.28, .2], [.56, .2], [.84, 1.5]], k, j, fs = [349, 440, 523, 698];
+      hits.forEach(function (h, n) {
+        var st = t + h[0] * b * 1.6, d = h[1] * (n === 3 ? b * 1.2 : b * 1.2), g = ctx.createGain(), lp = ctx.createBiquadFilter();
+        lp.type = "lowpass"; lp.frequency.value = 3200; lp.Q.value = .8; g.gain.setValueAtTime(.0001, st); g.gain.linearRampToValueAtTime(.13 * v, st + .012); g.gain.setValueAtTime(.13 * v, st + d * .8); g.gain.exponentialRampToValueAtTime(.0001, st + d + .06);
+        for (j = 0; j < fs.length; j++) { var o = ctx.createOscillator(); o.type = "sawtooth"; o.frequency.setValueAtTime(fs[j] * (n === 3 ? 1.02 : 1), st); if (n === 3) o.frequency.exponentialRampToValueAtTime(fs[j] * .965, st + d); o.detune.value = (j - 1.5) * 7; o.connect(lp); o.start(st); o.stop(st + d + .1); }
+        var hs = ctx.createWaveShaper(); hs.curve = sc; lp.connect(hs); hs.connect(g); g.connect(bus);
+      });
+    };
+    F.siren = function (t, v, dur) {
+      var o = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter(), k, n = Math.max(2, Math.round((dur || 1.6) / .55)); o.type = "square"; lp.type = "lowpass"; lp.frequency.value = 2400;
+      o.frequency.setValueAtTime(620, t); for (k = 0; k < n; k++) { o.frequency.linearRampToValueAtTime(1500, t + k * .55 + .27); o.frequency.linearRampToValueAtTime(620, t + (k + 1) * .55); }
+      g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(.12 * v, t + .03); g.gain.setValueAtTime(.12 * v, t + n * .55 - .08); g.gain.linearRampToValueAtTime(0, t + n * .55);
+      o.connect(lp); lp.connect(g); g.connect(bus); o.start(t); o.stop(t + n * .55 + .05);
+    };
+    F.laser = function (t, v) { osc(t, .3, "sawtooth", 4200, 180, .16 * v, .002); noise(t, .22, "bandpass", 5000, 700, 3, .08 * v, .002); };
+    /* scratch: a few back-and-forth strokes of a "record" (a pitched saw with a bandpass and a noise rub) */
+    F.scratch = function (t, beat, v, n) {
+      var k, cnt = n || 6, st = beat / cnt * 2.2;
+      for (k = 0; k < cnt; k++) {
+        var s0 = t + k * st, up = k % 2 === 0, f0 = up ? 190 : 560, f1 = up ? 560 : 190, o = ctx.createOscillator(), bp = ctx.createBiquadFilter(), g = ctx.createGain();
+        o.type = "sawtooth"; o.frequency.setValueAtTime(f0 * (1 + (k % 3) * .12), s0); o.frequency.exponentialRampToValueAtTime(f1, s0 + st * .9); bp.type = "bandpass"; bp.frequency.setValueAtTime(900, s0); bp.frequency.linearRampToValueAtTime(2600, s0 + st * .45); bp.frequency.linearRampToValueAtTime(900, s0 + st); bp.Q.value = 3;
+        g.gain.setValueAtTime(.0001, s0); g.gain.linearRampToValueAtTime(.22 * v, s0 + .012); g.gain.setValueAtTime(.22 * v, s0 + st * .75); g.gain.linearRampToValueAtTime(.0001, s0 + st * .98);
+        o.connect(bp); bp.connect(g); g.connect(bus); o.start(s0); o.stop(s0 + st + .03); noise(s0, st * .9, "bandpass", 1800, 1800, 2, .08 * v, .01);
+      }
+    };
+    F.rewind = function (t, dur, v) { noise(t, dur, "bandpass", 9000, 300, 1.6, .38 * v, .02); osc(t, dur, "sawtooth", 1900, 70, .18 * v, .02); };
+    /* brake: the platter slowing to a stop (a falling pitch, a closing filter, a fading rub) */
+    F.brake = function (t, dur, v) {
+      var o = ctx.createOscillator(), lp = ctx.createBiquadFilter(), g = ctx.createGain(); o.type = "sawtooth"; o.frequency.setValueAtTime(520, t); o.frequency.exponentialRampToValueAtTime(38, t + dur);
+      lp.type = "lowpass"; lp.frequency.setValueAtTime(3500, t); lp.frequency.exponentialRampToValueAtTime(120, t + dur); g.gain.setValueAtTime(.2 * v, t); g.gain.linearRampToValueAtTime(0, t + dur);
+      o.connect(lp); lp.connect(g); g.connect(bus); o.start(t); o.stop(t + dur + .05); noise(t, dur, "lowpass", 6000, 200, .8, .16 * v, .01);
+    };
+    F.snareRoll = function (t, beat, beats, v) {
+      var tt = t, end = t + beat * beats, gap = beat / 2, n = 0, total = beat * beats;
+      while (tt < end - .01) {
+        var u = (tt - t) / total, vel = (.25 + .75 * u) * v; noise(tt, .14, "highpass", 1700, 1700, .7, .5 * vel, .002); osc(tt, .09, "triangle", 230, 170, .22 * vel, .002);
+        gap = beat / (2 + 6 * u); if (gap < beat / 8) gap = beat / 8; tt += gap; n++;
+      }
+    };
+    return F;
+  }
   function normStyle(x) { var p = parseBrief({ style: x }); return p.style && p.style !== "solo" ? p.style : ""; }
   /* a mix plan: which genres, how long, how the energy travels; tempos are chosen to stay close to the previous track so every handover can be beat-matched */
   function buildMixPlan(o) {
@@ -2773,7 +2867,7 @@
     if (!styles.length) styles = MIX_DEFAULT_STYLES.slice();
     var moods = (Array.isArray(o.moods) ? o.moods : (o.mood ? [o.mood] : [])).map(function (m) { return parseBrief({ mood: m }).mood; }).filter(function (m) { return m !== "neutral"; });
     var minutes = clamp(Number(o.minutes) || 15, 1, 120), shape = ["wave", "build", "peak", "chill", "warmup"].indexOf(o.shape) >= 0 ? o.shape : "wave";
-    var trans = MIX_TRANS[o.trans] ? o.trans : "blend", transBars = MIX_TRANS[trans];
+    var trans = MIX_TRANS[o.trans] ? o.trans : "auto", transBars = MIX_TRANS[trans];
     var tsec = clamp(Number(o.trackSec) || 170, 30, 300), n = Math.max(2, Math.round(minutes * 60 / tsec)), tracks = [], prev = 0, lastStyle = "", key = o.key !== undefined ? parseKey(o.key) : null;
     for (var i = 0; i < n; i++) {
       var u = n > 1 ? i / (n - 1) : 0, e;
@@ -2808,9 +2902,11 @@
     for (q = 0; q < 512; q++) { var x = q / 255.5 - 1; cv[q] = Math.tanh(x * 1.1) / Math.tanh(1.1); } sc.curve = cv;
     bus.connect(bg); bg.connect(sc); sc.connect(dest); dest = bus; M.bus = bus;
     var rng = makeRng(plan.seed ^ 0x5bd1e995);
+    var fx = DJFX(ctx, dest); M.fx = fx;
     M.begin = function (at) { var pc = mixTrackPiece(ctx, dest, plan.tracks[0], plan.key, null, lite, quality, at, 0); pc.eng.fadeIn(at, 1.5); return pc; };
     M.afterBar = function (pc, bar) {
       var tr = plan.tracks[M.idx];
+      if (!pc.leaving && pc.tr === tr) M.perform(pc, bar);
       if (pc.leaving || pc.tr !== tr) { if (pc.tr && pc.tr === plan.tracks[M.idx] && pc.bars >= plan.transBars && !pc.released) { pc.released = true; pc.comp.release(pc.tr.nat); } return null; }
       if (pc.bars >= plan.transBars && !pc.released) { pc.released = true; if (M.idx > 0) pc.comp.release(tr.nat); }
       var lastTrack = M.idx >= plan.tracks.length - 1, B = plan.transBars;
@@ -2823,25 +2919,82 @@
       M.forceNext = false;
       return M.transition(pc, bar);
     };
+    /* what a DJ does at the handover, picked per transition when the mix is on "auto" (energy and the next genre nudge the odds) */
+    function pickTrans(nxt, tr) {
+      var w = { blend: 3, echo: 2, filter: 1.8, roll: 1.4 + (nxt.energy > .7 ? 1 : 0), brake: .8, rewind: .7, cut: .6 };
+      if (tr && tr.energy < .45) { w.roll = .4; w.brake = .3; w.filter += 1; }
+      return rng.weighted(w);
+    }
     M.transition = function (pc, bar) {
-      var at = pc.nextT, bd = bar.barDur, B = plan.transBars, dur = B * bd, nxt = plan.tracks[M.idx + 1], st = pc.comp.state();
+      var at = pc.nextT, bd = bar.barDur, beat = bd / 4, B = plan.transBars, dur = B * bd, nxt = plan.tracks[M.idx + 1], st = pc.comp.state(), tr = plan.tracks[M.idx];
+      var kind = plan.trans === "auto" ? pickTrans(nxt, tr) : plan.trans === "quick" ? "blend" : plan.trans;
       pc.comp.hold(); pc.leaving = true;
       /* harmonic mixing: move to a closely related key (same, fifth up, fourth up, or step up) and keep the mode */
       var step = rng.weighted({ "0": 3, "7": 3, "5": 2.2, "2": .8 }), root = (st.root + parseInt(step, 10)) % 12;
-      var inc = mixTrackPiece(ctx, dest, nxt, root, rng.chance(.75) ? st.mode : null, lite, quality, at, bar.bpm);
+      var mode = rng.chance(.75) ? st.mode : null, E1 = pc.eng, inc, sd = { stepDur: bar.stepDur }, big = nxt.energy > .62;
       M.idx++;
-      var sd = { stepDur: bar.stepDur }, swap = at + dur * .5;
-      if (plan.trans === "cut") {
-        pc.eng.xfade(at + bd * .25, bd * .75, false); inc.eng.out.gain.cancelScheduledValues(0); inc.eng.out.gain.setValueAtTime(1, Math.max(0, at - .01));
-        try { inc.eng.fx({ k: "impact", v: .6 }, at, sd); } catch (e) {}
-        pc.endT = at + bd + .2;
-      } else {
-        inc.eng.xfade(at, dur * .5, true); pc.eng.xfade(at + dur * .55, dur * .45, false);
-        inc.eng.djSet(480, Math.max(0, at - .02)); inc.eng.djSweep(swap, bd, 480, 12); pc.eng.djSweep(swap, bd, 12, 480);
-        try { pc.eng.fx({ k: "revcrash", d: 16, v: .5 }, swap - bd, sd); inc.eng.fx({ k: "impact", v: .38 }, swap, sd); } catch (e) {}
+      if (kind === "blend") {
+        inc = mixTrackPiece(ctx, dest, nxt, root, mode, lite, quality, at, bar.bpm);
+        var swap = at + dur * .5;
+        inc.eng.xfade(at, dur * .5, true); E1.xfade(at + dur * .55, dur * .45, false);
+        inc.eng.djSet(480, Math.max(0, at - .02)); inc.eng.djSweep(swap, bd, 480, 12); E1.djSweep(swap, bd, 12, 480);
+        /* the DJ lifts the room: a riser into the swap, an echo throw as the old bass leaves, and now and then a horn */
+        try {
+          fx.sweepUp(swap - 4 * bd, 4 * bd, .6); fx.impact(swap, .38); fx.crash(swap, .4);
+          E1.djEchoOn(swap - beat * 2, beat, .75, .55, .8); E1.djEchoOff(swap + beat, .08);
+          if (nxt.energy > .66 && rng.chance(.4)) fx.horn(swap + .02, .6, beat);
+        } catch (e) {}
         pc.endT = at + dur + .1;
+        return inc;
       }
+      /* every other handover lets the outgoing track play to its planned end and drops the next one on the downbeat */
+      var at2 = at + dur;
+      inc = mixTrackPiece(ctx, dest, nxt, root, mode, lite, quality, at2, bar.bpm);
+      inc.eng.out.gain.setValueAtTime(.0001, 0); inc.eng.out.gain.setValueAtTime(1, Math.max(0, at2 - .02));
+      pc.endT = at2 + .05;
+      try {
+        if (kind === "roll") {
+          E1.djSweep(at2 - 2 * bd, 2 * bd, 12, 1100); E1.djChop(at2 - bd, at2, beat, [1, 2, 4, 8], .0001);
+          fx.snareRoll(at2 - 2 * bd, beat, 8, .8); fx.sweepUp(at2 - 2 * bd, 2 * bd, .8);
+          E1.djEchoOn(at2 - beat, beat, .5, .5, .6); E1.djEchoOff(at2, .05);
+          fx.impact(at2, .4); fx.crash(at2, .4); if (big && rng.chance(.5)) fx.horn(at2 + .03, .6, beat); else if (rng.chance(.3)) fx.laser(at2 + beat * 3, .6);
+          pc.endT = at2 + 2.5;
+        } else if (kind === "echo") {
+          E1.djEchoOn(at2 - bd, beat, .75, .66, .9); E1.djGateSet(at2, 0, .012); E1.djEchoOff(at2 + .03, .05);
+          fx.sweepUp(at2 - bd, bd, .35); fx.impact(at2, .45); if (rng.chance(.3)) fx.laser(at2 + beat * 2, .5);
+          pc.endT = at2 + 6;
+        } else if (kind === "filter") {
+          E1.djLP(at2 - 4 * bd, 4 * bd, 20000, 230, 7); E1.djGateSet(at2, 0, .02);
+          inc.eng.djLP(at2, 2 * bd, 380, 20000, 4);
+          fx.sweepDown(at2 - 4 * bd, 4 * bd, .25); fx.sweepUp(at2 - bd, bd, .55); fx.impact(at2, .5); fx.crash(at2, .45);
+          pc.endT = at2 + .6;
+        } else if (kind === "brake") {
+          var bl = beat * 3; E1.djLP(at2 - bl, bl, 18000, 110, 5); fx.brake(at2 - bl, bl, .8); E1.djGateSet(at2 - .03, 0, .03);
+          fx.impact(at2, .6); fx.crash(at2, .5); if (rng.chance(.4)) fx.siren(at2 + .02, .5, 1.1);
+          pc.endT = at2 + .4;
+        } else if (kind === "rewind") {
+          var rl = beat * 2; E1.djGateSet(at2 - rl, 0, .02); fx.rewind(at2 - rl, rl, .8); fx.impact(at2, .55); fx.crash(at2, .5);
+          if (big && rng.chance(.5)) fx.horn(at2 + .03, .6, beat);
+          pc.endT = at2 + .4;
+        } else {
+          /* cut: the outgoing track is scratched out and the next one hits on the one */
+          E1.djGateSet(at2 - beat * 2, 0, .01); fx.scratch(at2 - beat * 2, beat * 2, .9, 7); fx.impact(at2, .5);
+          if (rng.chance(.35)) fx.laser(at2 + beat, .5);
+          pc.endT = at2 + .4;
+        }
+      } catch (e) {}
       return inc;
+    };
+    /* the DJ playing the mix live between handovers: horns on drops, echo throws at the end of phrases, filter lifts */
+    M.perform = function (pc, bar) {
+      if (pc.leaving || pc.bars < plan.transBars + 4 || !pc.tr) return;
+      var bd = bar.barDur, beat = bd / 4, t = pc.nextT, kind = bar.sec && bar.sec.kind, tr = pc.tr;
+      if (bar.secStart && /chorus|drop|climax/.test(kind) && !pc.hornDone && tr.energy > .6 && rng.chance(.3)) { pc.hornDone = true; try { fx.horn(t + .02, .55, beat); } catch (e) {} }
+      if (bar.secStart && /chorus|drop|climax/.test(kind) && rng.chance(.35)) { try { fx.crash(t, .3); } catch (e) {} }
+      var ph = pc.bars % 8;
+      if (ph === 7 && rng.chance(.35)) { try { pc.eng.djEchoOn(t + beat * 3, beat, .75, .55, .75); pc.eng.djEchoOff(t + bd, .06); } catch (e) {} }
+      else if (pc.bars % 16 === 15 && rng.chance(.3)) { try { pc.eng.djBump(t, bd, 700); fx.sweepUp(t, bd, .3); } catch (e) {} }
+      else if (ph === 7 && rng.chance(.15) && tr.energy > .5) { try { fx.laser(t + beat * 3.5, .4); } catch (e) {} }
     };
     M.skip = function () { M.forceNext = true; };
     return M;
@@ -3082,19 +3235,19 @@
       Sx("chorus", 8, 1, "F G Am Am", {}),
       Sx("outro", 4, .35, "Am G F Am", { lead: "sparse", drums: 1 })] };
 
-  EX.amapiano = { title: "Sunday Piano", key: "A", mode: "minor", bpm: 112, style: "amapiano", moods: ["joy", "love", "hope"],
+  EX.amapiano = { title: "Sunday Piano", key: "A", mode: "minor", bpm: 113, style: "amapiano", moods: ["joy", "love", "hope"],
     band: { pad: "pad", comp: "keys", lead: "piano", arp: "none", bass: "log" }, motif: { on: [0, 3, 6, 10], deg: [4, 2, 4, 0] },
     sections: [
-      Sx("intro", 4, .35, "Am9 Fmaj7 Dm9 E7", { lead: "none", drums: 1 }),
+      Sx("intro", 8, .35, "Am9 Fmaj7 Dm9 E7", { lead: "none", drums: 1, groove: { kick: "x.......x..x....", clap: "....x.......x...", shaker: "xoxoxoxoxoxoxoxo", rim: "...x..x...x..x.." } }),
       Sx("verse", 8, .6, "Am9 Fmaj7 Dm9 E7", { drums: 1, mel: N("0:0:4:3 0:6:2:2 0:8:0:4 0:12:2:4 1:0:5:3 1:6:3:2 1:8:0:4 1:12:5:4 2:0:5:3 2:6:3:2 2:8:1:4 2:12:3:4 3:0:3:3 3:6:1:2 3:8:4:8"),
-        bassline: B("0:0:R:4 0:6:5:2 0:10:R:3 0:14:a:2"), groove: { kick: "x.....x.x.......", rim: "............x...", shaker: "xoxoxoxoxoxoxoxo", hat: "..x...x...x...x." } }),
+        bassline: B("0:0:R:4 0:4:5:3 0:8:R:3 0:11:R:3 0:14:a:2"), groove: { kick: "x...x...x..x....", rim: "...x..x...x..x..", clap: "....x.......x...", shaker: "xoxoxoxoxoxoxoxo", hat: "..x...x...x...x." } }),
       Sx("chorus", 8, .9, "Fmaj7 Am9 Dm9 E7", { mel: N("0:0:7:3 0:6:5:2 0:8:7:4 0:12:9:4 1:0:9:3 1:6:8:2 1:8:7:2 1:10:5:2 1:12:4:4 2:0:7:3 2:6:5:2 2:8:7:4 2:12:5:4 3:0:8:4 3:6:6:2 3:8:4:8"),
-        bassline: B("0:0:R:4 0:6:5:2 0:8:8:3 0:12:R:2 0:14:a:2"), groove: { kick: "x.......x.x.....", rim: "............x...", clap: "....x.......x...", shaker: "xoxoxoxoxoxoxoxo", hat: "..x...x...x...x.", cLo: "..x...x...x..x.." } }),
+        bassline: B("0:0:R:4 0:4:R:3 0:8:R:3 0:11:5:2 0:14:a:2"), groove: { kick: "x...x...x..x....", rim: "...x..x...x..x..", clap: "....x.......x...", shaker: "xoxoxoxoxoxoxoxo", open: "..x...x...x...x." } }),
       Sx("verse", 8, .65, "Am9 Fmaj7 Dm9 E7", { drums: 1 }),
       Sx("chorus", 8, .95, "Fmaj7 Am9 Dm9 E7", {}),
-      Sx("break", 4, .4, "Am9 Fmaj7 Dm9 E7", { lead: "sparse", drums: 1 }),
+      Sx("break", 8, .4, "Am9 Fmaj7 Dm9 E7", { lead: "sparse", drums: 1 }),
       Sx("chorus", 8, 1, "Fmaj7 Am9 Dm9 E7", {}),
-      Sx("outro", 4, .3, "Am9 Fmaj7 Dm9 Am9", { lead: "sparse", drums: 1 })] };
+      Sx("outro", 8, .3, "Am9 Fmaj7 Dm9 Am9", { lead: "sparse", drums: 1, groove: { kick: "x.......x..x....", clap: "....x.......x...", shaker: "xoxoxoxoxoxoxoxo", rim: "...x..x...x..x.." } })] };
 
   EX.lofi = { title: "Rainy Window", key: "C", mode: "ionian", bpm: 78, style: "lofi", moods: ["calm", "sadness", "neutral"],
     band: { pad: "pad", comp: "keys", lead: "guitar", arp: "none", bass: "upbass" }, motif: { on: [0, 4, 8, 12], deg: [4, 2, 4, 0] },
@@ -3201,7 +3354,7 @@
     jazz: ["flute", 12, { lead: "keys" }], reggae: ["flute", 12, { lead: "keys" }], funk: ["brass", 0, { lead: "synth" }], hiphop: ["pluck", 0, { lead: "keys" }],
     trap: ["synth", 12, { lead: "pluck" }], phonk: ["bells", 12, { lead: "vox" }], memphis: ["hum", 0, { lead: "bells" }], afrobeats: ["kalimba", 12, { lead: "flute" }], amapiano: ["bells", 12, { lead: "flute" }], lofi: ["kalimba", 12, { lead: "flute" }],
     house: ["synth", 12, { lead: "bells" }], rnb: ["ooh", 0, { lead: "violin" }], ambient: ["harp", 12, { lead: "flute" }], cinematic: ["bells", 12, { lead: "flute" }], acoustic: ["flute", 0, { lead: "kalimba" }] };
-  var FMIX = { hiphop: { drums: 1.05, bass: 1.15 }, trap: { drums: 1.0, bass: 1.2 }, phonk: { drums: 1.0, bass: .75, lead: 1.15 }, memphis: { drums: .95, bass: .5, lead: 1.15 }, house: { drums: 1.1, bass: 1.1 }, ambient: { pad: 1.05, lead: .9 }, cinematic: { pad: 1.05, lead: 1.0 }, lofi: { drums: .9 }, rnb: { drums: .9, lead: 1.05 } };
+  var FMIX = { hiphop: { drums: 1.05, bass: 1.15 }, trap: { drums: 1.0, bass: 1.2 }, amapiano: { hats: 1.6, bass: .85, drums: 1.0 }, phonk: { drums: 1.0, bass: .75, lead: 1.15 }, memphis: { drums: .95, bass: .5, lead: 1.15 }, house: { drums: 1.1, bass: 1.1 }, ambient: { pad: 1.05, lead: .9 }, cinematic: { pad: 1.05, lead: 1.0 }, lofi: { drums: .9 }, rnb: { drums: .9, lead: 1.05 } };
   Object.keys(EX).forEach(function (k) {
     var ex = EX[k], f = FIN[k], m = FMIX[k] || {};
     ex.sections.forEach(function (sx, i) {
@@ -3210,7 +3363,7 @@
       if (/^(pop|rnb|acoustic)$/.test(k) && sx.kind === "chorus" && i === ex.sections.map(function (z) { return z.kind; }).lastIndexOf("chorus")) sx.modulate = 2;
       if (sx.kind === "intro") { var nb = {}; if (ex.band.arp !== "none") nb.arp = "none"; if (ex.band.comp !== "none") nb.comp = "none"; if (k !== "ambient" && k !== "cinematic") sx.band = nb; }
     });
-    ex.mix = { lead: { lvl: m.lead || 1.1, rv: 1.0 }, pad: { lvl: m.pad || .9, rv: 1.2 }, bass: { lvl: m.bass || 1.05 }, drums: { lvl: m.drums || .95 } };
+    ex.mix = { lead: { lvl: m.lead || 1.1, rv: 1.0 }, pad: { lvl: m.pad || .9, rv: 1.2 }, bass: { lvl: m.bass || 1.05 }, drums: { lvl: m.drums || .95 } }; if (m.hats) ex.mix.hats = { lvl: m.hats };
   });
   var MOOD_EX = { joy: "pop", hope: "acoustic", love: "rnb", sadness: "cinematic", calm: "lofi", anger: "rock", fear: "cinematic", neutral: "lofi", excited: "afrobeats" };
   function exemplar(style, mood, opt) {
