@@ -29,3 +29,8 @@ Kalimba, glockenspiel (used for "bells") and choir "aahs" (v11): FluidR3 GM Soun
 Voice "oohs" and synth choir (v18): FluidR3 GM SoundFont "Voice Oohs" and "Synth Choir", Copyright (c) 2000-2002, 2008, 2013 Frank Wen
 (MIT; the midi-js-soundfonts conversion by Benjamin Gleitzman lists it under Creative Commons Attribution 3.0 - credit given here in either case).
 The "vox", "hum" and synthetic fall-back voices are generated in the browser (no recordings).
+
+World percussion and African pitched instruments (v31): from the Versilian Community Sample Library (VCSL), released under CC0 1.0 (public domain;
+https://github.com/sgossner/VCSL), via danigb/samples (https://github.com/danigb/samples). Used: conga, cowbell, small shaker, claps, claves, tambourine
+(bank "drums-world"), slit/log drum ("logdrum"), mbira dzaVadzimu ("mbira"), balafon soft mallet ("balafon"), cowbell ("cowbell").
+Trimmed, level-matched and re-encoded as small mp3s.

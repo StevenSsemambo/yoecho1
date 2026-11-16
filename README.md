@@ -343,3 +343,8 @@ Decoded audio is raw floats, so all 24 banks together would need about 180 MB. B
 - **Afrobeats (Burna Boy style)**: percussion pushed forward (hats strip up), lean bass (high-pass raised to ~42 Hz), punchy synthesized kit.
 - **Amapiano** now follows the researched structure: 8-bar kick-less style intro (shaker, rim, keys, pad), soft four-on-the-floor kick, 16th shaker + off-beat open hats, e-piano 9th chords, log drum answering in two-bar phrases, main log-drum section with the piano dropped, breakdown, DJ-friendly outro; marimba/bells lead.
 Sources: producelikeapro (Fela), Sound On Sound (Burna Boy), Roland/beatstorapon + Native Instruments blogs (amapiano).
+
+## v31 — Real recordings + "What's off?" feedback
+- New CC0 recordings (VCSL via danigb/samples): world percussion (congas, cowbell, shaker, claps, claves, tambourine) now used by amapiano, Afrobeats and phonk instead of synthesized hand percussion; a real wooden log drum layered under the synthesized log drum; real mbira and balafon (African pitched idiophones) as leads/arps in amapiano, Afrobeats, Afrobeat; real cowbell for the phonk lead. Kick, snare and hats stay synthesized. Credits in `public/samples/CREDITS.txt`.
+- Not used on purpose: the Jeff Learman Rhodes (samples marked CC BY-NC) and the TR-808 sample set (no clear license).
+- 👎 now opens a "What's off?" sheet: genre sound, drums, bass, melody, instruments, busy/empty, tempo, mix, boring, plus "closer to…". Notes are kept on the device, attached to the composer log, and included in its copied text.

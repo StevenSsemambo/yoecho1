@@ -972,7 +972,7 @@ function loadEchoMusic(){
   if(_musicPromise) return _musicPromise;
   _musicPromise=new Promise((res,rej)=>{
     const el=document.createElement("script");
-    el.src="/echo-music.js?v=32"; el.async=true;
+    el.src="/echo-music.js?v=33"; el.async=true;
     el.onload=()=>{ if(window.EchoMusic){ window.dispatchEvent(new Event("echomusic-ready")); res(window.EchoMusic); } else rej(new Error("music engine missing")); };
     el.onerror=()=>rej(new Error("could not load the music engine"));
     document.head.appendChild(el);
@@ -1567,11 +1567,33 @@ function downloadWav(M,setBusy,mode,idx,wav){
   }).catch(()=>{}).finally(()=>setBusy(false));
 }
 function thumbDown(M){ M.feedback(-1); runMusic({cmd:"next"},(M.current()||{}).mood).catch(()=>{}); }
+// "What's off?" notes: what the listener heard wrong, kept on this device and in the composer log so the sound can be tuned from real ears
+const FBN_KEY="yoecho_fbnotes";
+function fbnGet(){ try{ return JSON.parse(localStorage.getItem(FBN_KEY)||"[]"); }catch(e){ return []; } }
+function fbnSave(n){ try{ localStorage.setItem(FBN_KEY,JSON.stringify([n,...fbnGet()].slice(0,40))); }catch(e){} }
+const FB_TAGS=["Not this genre's sound","Drums","Bass","Melody","Instruments sound fake","Too busy","Too empty","Wrong tempo","Mix / volume","Boring / repetitive"];
+function FeedbackSheet({M,acc,onDone}){
+  const[sel,setSel]=useState([]), [ref,setRef]=useState("");
+  const tog=t=>setSel(x=>x.includes(t)?x.filter(y=>y!==t):[...x,t]);
+  const send=skip=>{
+    const cu=(M.current&&M.current())||{}, inf=(M.info&&M.info())||{};
+    const note={t:Date.now(),title:inf.title||"",style:inf.style||cu.style||"",bpm:inf.bpm||0,mood:cu.mood||inf.mood||"",tags:sel,ref:ref.trim().slice(0,120)};
+    fbnSave(note); try{ if(CLOG.cur){ CLOG.cur.fb=note; CLOG.cur.tags=[...new Set([...(CLOG.cur.tags||[]),...sel])]; clogSave(); } }catch(e){}
+    try{ M.feedback(-1); }catch(e){} if(skip) runMusic({cmd:"next"},note.mood).catch(()=>{}); onDone();
+  };
+  const chip=on=>({...mbtn,padding:"5px 10px",fontSize:9,borderColor:on?acc:"rgba(196,168,130,.22)",background:on?acc+"22":undefined,minHeight:28});
+  return <div style={{marginTop:10,padding:"10px 12px",borderRadius:12,background:"rgba(196,168,130,.06)",border:"1px solid rgba(196,168,130,.16)"}}>
+    <div style={{fontSize:9,letterSpacing:".14em",color:acc,opacity:.7,fontFamily:SS,marginBottom:8}}>WHAT'S OFF?</div>
+    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>{FB_TAGS.map(t=><button key={t} onClick={()=>tog(t)} style={chip(sel.includes(t))}>{t}</button>)}</div>
+    <input value={ref} onChange={e=>setRef(e.target.value)} placeholder="Closer to… (a song or artist, optional)" style={{width:"100%",boxSizing:"border-box",background:"rgba(0,0,0,.25)",border:"1px solid rgba(196,168,130,.2)",borderRadius:10,padding:"8px 10px",color:"rgba(235,228,216,.9)",fontSize:12,fontFamily:SS,outline:"none",marginBottom:8}}/>
+    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button onClick={()=>send(true)} style={mbtn}>SEND & NEW ONE</button><button onClick={()=>send(false)} style={mbtn}>SEND</button><button onClick={onDone} style={{...mbtn,opacity:.6}}>CANCEL</button></div>
+  </div>;
+}
 function ComposerLog({acc}){
   const[open,setOpen]=useState(false), [,bump]=useState(0), [copied,setCopied]=useState(false);
   useEffect(()=>{ if(!open) return; const id=setInterval(()=>bump(x=>x+1),1500); return()=>clearInterval(id); },[open]);
   const P=CLOG.pieces, tag=(p,t)=>{ p.tags=p.tags.includes(t)?p.tags.filter(x=>x!==t):[...p.tags,t]; clogSave(); bump(x=>x+1); };
-  const copy=()=>{ try{ const txt=JSON.stringify(P.map(p=>({...p,diagnosis:clogDiagnose(p)}))); navigator.clipboard.writeText(txt).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2500);}); }catch(e){} };
+  const copy=()=>{ try{ const txt=JSON.stringify({pieces:P.map(p=>({...p,diagnosis:clogDiagnose(p)})),listenerNotes:fbnGet().slice(0,15)}); navigator.clipboard.writeText(txt).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2500);}); }catch(e){} };
   const tiny={fontSize:10,lineHeight:1.7,color:"rgba(235,228,216,.62)",fontFamily:SS};
   return <div style={{marginTop:22}}>
     <button onClick={()=>setOpen(o=>!o)} style={{...mbtn,fontSize:9,opacity:.75}}>{open?"▾":"▸"} COMPOSER LOG</button>
@@ -1593,7 +1615,7 @@ const mbtn={background:"rgba(196,168,130,.09)",border:"1px solid rgba(196,168,13
 
 // The card inside a chat bubble
 function MusicCard({music,mood}){
-  const live=useMusicInfo(), M=window.EchoMusic, m=MOODS[mood]||MOODS.neutral, [dlb,setDlb]=useState(false), [vote,setVote]=useState(0);
+  const live=useMusicInfo(), M=window.EchoMusic, m=MOODS[mood]||MOODS.neutral, [dlb,setDlb]=useState(false), [vote,setVote]=useState(0), [fbOpen,setFbOpen]=useState(false);
   if(music.error) return <div style={{marginTop:8,marginLeft:24,fontSize:11,color:"rgba(235,228,216,.5)",fontFamily:SS}}>♫ {music.error}</div>;
   if(music.stopped) return <div style={{marginTop:8,marginLeft:24,fontSize:9,letterSpacing:".12em",color:m.acc,opacity:.5,fontFamily:SS}}>■ MUSIC STOPPED</div>;
   if(music.chip) return <div style={{marginTop:8,marginLeft:24,fontSize:9,letterSpacing:".12em",color:m.acc,opacity:.6,fontFamily:SS}}>♫ {music.chip}</div>;
@@ -1612,28 +1634,30 @@ function MusicCard({music,mood}){
     {isLive&&<div style={{display:"flex",gap:8,marginTop:10}}>
       <button onClick={()=>M.next()} style={mbtn}>⏭ NEW ONE</button>
       <button onClick={()=>{M.feedback(1);setVote(1);}} aria-label="Like" style={{...mbtn,opacity:vote===1?1:.85,borderColor:vote===1?m.acc:undefined}}>👍</button>
-      <button onClick={()=>{setVote(-1);thumbDown(M);}} aria-label="Not for me" style={mbtn}>👎</button>
+      <button onClick={()=>{setVote(-1);setFbOpen(o=>!o);}} aria-label="Not for me" style={mbtn}>👎</button>
       <button disabled={dlb} onClick={()=>downloadWav(M,setDlb,"full")} style={{...mbtn,opacity:dlb?.5:1}}>{dlb?"RENDERING…":"⤓ SAVE"}</button>
     </div>}
+    {isLive&&fbOpen&&<FeedbackSheet M={M} acc={m.acc} onDone={()=>setFbOpen(false)}/>}
   </div>;
 }
 
 // Floating mini player + expandable controls, visible whenever music is playing
 function MusicControls({M,info,acc}){
   const[busy,setBusy]=useState(false);
-  const[vol,setVol]=useState(info.volume!=null?info.volume:.7);
+  const[vol,setVol]=useState(info.volume!=null?info.volume:.7), [fbOpen,setFbOpen]=useState(false);
   return <div>
     <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:10}}>
       <button style={mbtn} onClick={()=>M.toggle()}>{info.playing?"❚❚ PAUSE":"▶ PLAY"}</button>
       <button style={mbtn} onClick={()=>M.next()}>⏭ NEW</button>
       <button style={mbtn} onClick={()=>M.feedback(1)} aria-label="Like">👍 LIKE</button>
-      <button style={mbtn} onClick={()=>thumbDown(M)} aria-label="Not for me">👎 SKIP</button>
+      <button style={mbtn} onClick={()=>setFbOpen(o=>!o)} aria-label="Not for me">👎 WHAT'S OFF?</button>
       <button style={mbtn} onClick={()=>M.steer({energy:-.2,bpm:-6})}>− ENERGY</button>
       <button style={mbtn} onClick={()=>M.steer({energy:.2,bpm:6})}>+ ENERGY</button>
       <button style={{...mbtn,opacity:busy?.5:1}} disabled={busy} onClick={()=>downloadWav(M,setBusy,"min")}>{busy?"RENDERING…":"⤓ 1 MIN"}</button>
       <button style={{...mbtn,opacity:busy?.5:1}} disabled={busy} onClick={()=>downloadWav(M,setBusy,"full")}>{busy?"RENDERING…":"⤓ FULL SONG"}</button>
       <button style={{...mbtn,opacity:busy?.5:1}} disabled={busy} onClick={()=>downloadWav(M,setBusy,"full",undefined,true)}>{busy?"…":"⤓ WAV"}</button>
     </div>
+    {fbOpen&&<FeedbackSheet M={M} acc={acc} onDone={()=>setFbOpen(false)}/>}
     <div style={{fontSize:8,letterSpacing:".14em",color:acc,opacity:.5,fontFamily:SS,marginBottom:6}}>CHANGE THE FEEL</div>
     <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
       {MUSIC_MOODS.map(k=><button key={k} onClick={()=>M.steer({mood:k})} style={{...mbtn,padding:"5px 10px",fontSize:9,borderColor:info.mood===k?acc:"rgba(196,168,130,.22)"}}>{k.toUpperCase()}</button>)}
