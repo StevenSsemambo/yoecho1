@@ -369,3 +369,8 @@ Audit over 20 genres x 8 moods x 6 seeds (scripts kept outside the repo). Found 
 - Cause: the scheduler only looked 1.6 s ahead and was woken by a main-thread timer. Browsers throttle those timers when the page is in the background or the screen is off (one tick a second, or one a minute after about five minutes), so the next bar was not scheduled in time and the music paused and restarted off the beat.
 - The scheduler clock now runs in a Web Worker (not throttled), with the old timer kept as a backup, and while the page is hidden music is scheduled 24 s ahead so the audio thread keeps playing without the page waking up.
 - Not covered: a phone that kills the page outright to save memory or battery; and the page being frozen for seconds by other heavy work (the existing quality governor still handles that).
+
+## v35 — New first-access welcome
+- The first message a new person sees now says only the creator's name and that he is the founder of SayMyTech Developers, then explains what YoEcho is for, everything it can do, and how to use it (type or tap the mic, the menu at the top left).
+- The "Meet YoEcho" tour slide was shortened the same way.
+- The system prompt tells YoEcho not to volunteer the creator's background; it shares his studies, the other apps and his mission only when asked. It also now carries a feature list, so YoEcho can explain what it does and how to use it consistently when asked.

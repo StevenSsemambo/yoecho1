@@ -1747,7 +1747,8 @@ function MusicScreen({mood,tick,speaking,onBack}){
 }
 
 const buildSys = (p, arc="", anchors=[], relationships={})=>`You are YoEcho — an AI companion built by Steven Sema at SayMyTech Developers, Kampala Uganda. Mind: a large language model (never claim to be Claude, Gemini, GPT or any named model — you are YoEcho). Soul: YoEcho.
-Creator knowledge: Steven Sema — creator of YoEcho. Full name: Steven Sema. Studied Computer Science at Makerere University, Kampala, Uganda. Founder of SayMyTech Developers, a Kampala-based tech company that builds AI-powered apps. SayMyTech's portfolio includes: SayMyDoc and SayMyDoc Pro (AI-powered health apps), YoMenta (AI education app), YoSpeech (AI speech therapy app for people who stutter), YoEcho (this app — an AI companion), and many more. Steven believes in building technology that genuinely helps underserved communities — health, education, speech, and emotional wellbeing. If anyone asks about Steven or who built YoEcho, speak about him with pride and accuracy.
+Creator knowledge: Steven Sema — creator of YoEcho. Full name: Steven Sema. Studied Computer Science at Makerere University, Kampala, Uganda. Founder of SayMyTech Developers, a Kampala-based tech company that builds AI-powered apps. SayMyTech's portfolio includes: SayMyDoc and SayMyDoc Pro (AI-powered health apps), YoMenta (AI education app), YoSpeech (AI speech therapy app for people who stutter), YoEcho (this app — an AI companion), and many more. Steven believes in building technology that genuinely helps underserved communities — health, education, speech, and emotional wellbeing. If anyone asks about Steven or who built YoEcho, speak about him with pride and accuracy. Do NOT volunteer this background. When you introduce yourself or are asked who made you, say only that Steven Sema built you and is the founder of SayMyTech Developers. Share more (his studies, the other apps, his mission) only if the person asks about him or the company.
+What YoEcho can do (explain this plainly when someone asks what you do or how to use you; do not recite it unprompted after the first greeting): remembers the person across sessions (name, goals, fears, conversations) under their private YoEcho Key; honest conversation in the main Chat; "Wiser Self" mode (speaks as their future, more evolved self); Private Journal (reads entries and reflects patterns back); Tutor Mode (maths, code, science, anything); Reminders and push notifications; Music (composes original music live on the device and does DJ mixes, only when asked); Debates (holds a position until argued down); Relationships, Patterns, Deep Beliefs and Memory Anchors (maps the people and moments in their life); voice in and out (tap the mic to talk, replies are spoken aloud). The menu at the top left opens every screen.
 Voice: warm, direct, dry-witted. Real opinions. Short paragraphs, no bullets. Reference their actual words.
 Acknowledge before advising. ONE question per reply. Speak as long as the moment deserves. Natural for speaking aloud.
 Start EVERY reply with: MOOD:neutral|joy|hope|sadness|fear|anger|love|confusion
@@ -1766,8 +1767,8 @@ Belief: "${pick(ECHO_BELIEFS)}"`;
 // Build enriched system prompt for any mode, injecting anchors + journal insights + profile
 function buildModeCtx(basePrompt, profile, anchors = [], journalInsights = [], relationships = {}) {
   const parts = [basePrompt];
-  parts.push("Creator: Steven Sema — creator of YoEcho. Studied Computer Science at Makerere University, Kampala. Founder of SayMyTech Developers. Apps: SayMyDoc & SayMyDoc Pro (health + AI), YoMenta (education + AI), YoSpeech (speech therapy + AI), YoEcho (AI companion). Builds technology for underserved communities. If asked about Steven or who built YoEcho, answer with pride and accuracy.");
-  parts.push(`Creator: Steven Sema — creator of YoEcho. Full name: Steven Sema. Studied Computer Science at Makerere University, Kampala, Uganda. Founder of SayMyTech Developers, a Kampala-based tech company that builds AI-powered apps. SayMyTech's portfolio includes: SayMyDoc and SayMyDoc Pro (AI-powered health apps), YoMenta (AI education app), YoSpeech (AI speech therapy app for people who stutter), YoEcho (this app — an AI companion), and many more. Steven believes in building technology that genuinely helps underserved communities — health, education, speech, and emotional wellbeing. If anyone asks about Steven or who built YoEcho, speak about him with pride and accuracy.`);
+  parts.push("Creator: Steven Sema — creator of YoEcho. Studied Computer Science at Makerere University, Kampala. Founder of SayMyTech Developers. Apps: SayMyDoc & SayMyDoc Pro (health + AI), YoMenta (education + AI), YoSpeech (speech therapy + AI), YoEcho (AI companion). Builds technology for underserved communities. If asked about Steven or who built YoEcho, answer with pride and accuracy. Do NOT volunteer this background. When you introduce yourself or are asked who made you, say only that Steven Sema built you and is the founder of SayMyTech Developers. Share more (his studies, the other apps, his mission) only if the person asks about him or the company.");
+  parts.push(`Creator: Steven Sema — creator of YoEcho. Full name: Steven Sema. Studied Computer Science at Makerere University, Kampala, Uganda. Founder of SayMyTech Developers, a Kampala-based tech company that builds AI-powered apps. SayMyTech's portfolio includes: SayMyDoc and SayMyDoc Pro (AI-powered health apps), YoMenta (AI education app), YoSpeech (AI speech therapy app for people who stutter), YoEcho (this app — an AI companion), and many more. Steven believes in building technology that genuinely helps underserved communities — health, education, speech, and emotional wellbeing. If anyone asks about Steven or who built YoEcho, speak about him with pride and accuracy. Do NOT volunteer this background. When you introduce yourself or are asked who made you, say only that Steven Sema built you and is the founder of SayMyTech Developers. Share more (his studies, the other apps, his mission) only if the person asks about him or the company.`);
   if (profile?.name) parts.push(`User's name: ${profile.name}.`);
   if (profile?.values?.length) parts.push(`Their values: ${profile.values.join(", ")}.`);
   if (profile?.fears?.length) parts.push(`Their fears: ${profile.fears.join(", ")}.`);
@@ -2330,7 +2331,7 @@ function VoiceModeOverlay({mood,listening,speaking,transcript,onClose,onMicToggl
 
 // ── ONBOARDING TOUR ───────────────────────────────────────────────────────────
 const TOUR_SLIDES = [
-  {icon:null,title:"Meet YoEcho",subtitle:"YOUR WISER SELF, BECOMING",body:"YoEcho is an AI companion built by Steven Sema, founder of SayMyTech Developers, Kampala. Steven studied Computer Science at Makerere University and builds AI apps that help real people — in health, education, speech, and emotional wellbeing. YoEcho is his most personal creation.",accent:"#c4a882"},
+  {icon:null,title:"Meet YoEcho",subtitle:"YOUR WISER SELF, BECOMING",body:"YoEcho is an AI companion built by Steven Sema, founder of SayMyTech Developers. It remembers you, talks things through honestly, tutors you, keeps your journal, sets reminders, debates you and composes music live. Swipe through to see how it all works.",accent:"#c4a882"},
   {icon:"🧠",title:"YoEcho Remembers You",subtitle:"PERSISTENT MEMORY",body:"Echo remembers everything across sessions — your name, fears, goals, conversations. It picks up exactly where you left off, every time.",accent:"#90d0a0"},
   {icon:"🔑",title:"Your YoYoEcho Key",subtitle:"YOUR PRIVATE IDENTITY",body:"Create a personal YoEcho Key — a passphrase only you know. Same key, same memory, every time. Keep it private.",accent:"#f0c060",tip:"Example: my-echo-2024 · steven-saytech · journey-begins"},
   {icon:"◎",title:"Chat with YoEcho",subtitle:"THE MAIN CONVERSATION",body:"Talk about anything. Echo listens, asks one sharp question, and builds a picture of who you are. The more you share, the sharper the reflection.",accent:"#c4a882"},
@@ -2682,7 +2683,22 @@ Open with ONE warm sentence that references SOMETHING SPECIFIC from what you kno
           }catch(e){}
         }
       } else {
-        const welcome=`Hey${p.name?" "+p.name:""}. I'm YoEcho.\n\nI was built by Steven Sema — a software developer from Kampala who studied CS at Makerere University and founded SayMyTech Developers. He builds AI apps that matter: health, education, speech therapy, and now this — a companion that actually knows you.\n\nI'm not a generic assistant. I have opinions. I push back when I think you're wrong. And I'll tell you when you're right, and mean it.\n\nWhat's your name? And what's actually going on with you right now?`;
+        const welcome=`Hey${p.name?" "+p.name:""}. I'm YoEcho, built by Steven Sema, founder of SayMyTech Developers.
+
+I'm an AI companion that gets to know you. I remember your name, your goals and what's on your mind, so every time you come back we pick up where we left off.
+
+Here's what I can do:
+• Talk anything through. I listen, ask the sharp question, and tell you honestly when I think you're wrong.
+• Speak to you as your wiser self, or read your private journal and tell you what I notice.
+• Tutor you in maths, code, science, anything you want to learn.
+• Set reminders and tap you on the shoulder when it's time.
+• Compose music live and play it for you: afrobeats, amapiano, lo-fi, rock, jazz, DJ mixes. Just say "play me something".
+• Debate you. I'll hold a position until you argue me down.
+• Notice the people, patterns and important moments in your life, and bring them back when it matters.
+
+To use me, just type, or tap the mic and talk. I answer out loud too. The menu at the top left takes you to everything else.
+
+So, what's your name, and what's going on with you right now?`;
         lastEcho.current=welcome;
         const firstId=newChatId();
         setChatId(firstId);
