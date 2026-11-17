@@ -2640,7 +2640,10 @@
   /* ═══════════════ 6. player + public API ═══════════════ */
   var AC = global.AudioContext || global.webkitAudioContext;
   var VOL_KEY = "yoecho_music_vol";
-  var LOOKAHEAD = 1.6, TICK = 220;
+  var LOOKAHEAD = 1.8, LOOKAHEAD_HIDDEN = 24, TICK = 220;
+  /* how far ahead notes are scheduled. A page in the background (screen off, another app on top) gets its timers throttled by the browser to one tick a second or even one a minute,
+   * so while hidden the music is scheduled far ahead: the audio thread keeps playing it without the page having to wake up. */
+  function lookahead() { return (global.document && global.document.hidden) ? LOOKAHEAD_HIDDEN : LOOKAHEAD; }
   var P = { outs: [], mix: null, ctx: null, volG: null, duckG: null, holdG: null, analyser: null, vol: .8, piece: null, timer: null, listeners: [], paused: false, ducked: false, held: false, lastBrief: null, lite: false, lvlBuf: null };
   try { var sv = parseFloat(global.localStorage.getItem(VOL_KEY)); if (isFinite(sv)) P.vol = clamp(sv, 0, 1); } catch (e) {}
   try { var nav = global.navigator || {}; P.lite = !!((nav.hardwareConcurrency && nav.hardwareConcurrency <= 4) || (nav.deviceMemory && nav.deviceMemory <= 2) || /Android|iPhone|iPad|iPod|Mobile/i.test(nav.userAgent || "")); } catch (e) {}
@@ -2688,7 +2691,8 @@
   }
   function drive(pc, c) {
     if (pc.nextT < c.currentTime) pc.nextT = c.currentTime + .05;      /* fell behind (throttled tab): re-sync */
-    while (pc.nextT < c.currentTime + LOOKAHEAD) {
+    var la = lookahead();
+    while (pc.nextT < c.currentTime + la) {
       if (pc.endT && pc.nextT >= pc.endT) {
         pc.done = true;
         if (pc === P.piece && !pc.finished) { pc.finished = true; setTimeout(function () { if (P.piece === pc) { emit("mixend", {}); stop(); } }, 400); }
@@ -2723,8 +2727,21 @@
     if (pc.h.lag0 === null) { pc.h.lag0 = lag; return; }
     if (lag - pc.h.lag0 > .2 && P.quality < 2) { P.quality++; pc.eng.setQuality(P.quality); pc.h.lag0 = lag; emit("quality", { quality: P.quality }); }
   }
-  function startTimer() { if (!P.timer) P.timer = setInterval(tick, TICK); }
-  function stopTimer() { if (P.timer) { clearInterval(P.timer); P.timer = null; } }
+  /* the clock that wakes the scheduler lives in a Web Worker, because a worker's timers are not throttled when the page is in the background; a slow main-thread timer stays as a backup */
+  function startTimer() {
+    if (P.timer) return;
+    P.timer = setInterval(tick, 1000);
+    if (!P.worker && global.Worker && global.Blob && global.URL && global.URL.createObjectURL) {
+      try {
+        var url = global.URL.createObjectURL(new global.Blob(["var t=null;onmessage=function(e){if(e.data==='go'&&!t)t=setInterval(function(){postMessage(0)}," + TICK + ");else if(e.data==='stop'){clearInterval(t);t=null;}};"], { type: "text/javascript" }));
+        P.worker = new global.Worker(url); P.workerUrl = url; P.worker.onmessage = function () { tick(); }; P.worker.onerror = function () { stopWorker(); };
+      } catch (e) { P.worker = null; }
+    }
+    if (P.worker) { try { P.worker.postMessage("go"); } catch (e) { stopWorker(); } }
+    if (!P.worker) { clearInterval(P.timer); P.timer = setInterval(tick, TICK); }
+  }
+  function stopWorker() { try { if (P.worker) P.worker.terminate(); if (P.workerUrl) global.URL.revokeObjectURL(P.workerUrl); } catch (e) {} P.worker = null; P.workerUrl = null; if (P.timer) { clearInterval(P.timer); P.timer = setInterval(tick, TICK); } }
+  function stopTimer() { if (P.timer) { clearInterval(P.timer); P.timer = null; } if (P.worker) { try { P.worker.postMessage("stop"); } catch (e) {} } }
   if (global.document && global.document.addEventListener) {
     global.document.addEventListener("visibilitychange", function () { if (!global.document.hidden) tick(); });
     /* any tap brings suspended audio back (some browsers only allow resuming from a user gesture) */
@@ -3528,7 +3545,7 @@
     samples: { setBase: function (u) { SMP.base = u; }, memory: function () { return { mb: +(smpBytes() / 1048576).toFixed(1), budgetMB: +(smpBudget() / 1048576).toFixed(0), banks: Object.keys(SMP.banks).filter(function (k) { return SMP.banks[k].ready; }).length }; }, setBudgetMB: function (n) { SMP.budgetMB = n; }, enable: function (on) { SMP.on = !!on; }, enabled: function () { return SMP.on; }, status: function () { var o = {}; for (var k in SMP.banks) o[k] = SMP.banks[k].ready ? "ready" : SMP.banks[k].failed ? "failed" : "loading"; return o; }, preload: function (names) { var c = ensureCtx(); if (c) (names || Object.keys(SMAP).map(function (k) { return SMAP[k].bank; }).concat(["drums-acoustic", "drums-lm2"])).forEach(function (b) { smpGet(b, c); }); } },
     mix: mix, mixNext: mixNext, mixInfo: mixInfo, buildMixPlan: buildMixPlan, renderMix: renderMix,
     render: render, toWav: toWav, exportWav: exportWav, exportMixWav: exportMixWav,
-    _t: { INSTR_META: INSTR_META, FIT: FIT, fits: fits, parsePlan: parsePlan, DRUMBANK: DRUMBANK, SMP: SMP, SMAP: SMAP, ctx: function () { return P.ctx; }, Composer: Composer, Engine: Engine, LOUD: LOUD, STYLES: STYLES, RECIPES: RECIPES, KITS: KITS, STRIPS: STRIPS }
+    _t: { ahead: function () { return P.piece && P.ctx ? P.piece.nextT - P.ctx.currentTime : null; }, hasWorker: function () { return !!P.worker; }, INSTR_META: INSTR_META, FIT: FIT, fits: fits, parsePlan: parsePlan, DRUMBANK: DRUMBANK, SMP: SMP, SMAP: SMAP, ctx: function () { return P.ctx; }, Composer: Composer, Engine: Engine, LOUD: LOUD, STYLES: STYLES, RECIPES: RECIPES, KITS: KITS, STRIPS: STRIPS }
   };
   global.EchoMusic = API;
   if (typeof module !== "undefined" && module.exports) module.exports = API;

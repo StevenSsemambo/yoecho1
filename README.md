@@ -364,3 +364,8 @@ Audit over 20 genres x 8 moods x 6 seeds (scripts kept outside the repo). Found 
 - **Answer voice and lead of the same family** (4% of bars) is now 0; the arpeggio avoids the family of both the lead and the chords; mood brightness weighs more in the choice.
 - **Melody jumps between bars** (17-28% of adjacent bars jumped more than a fifth) are down to 3-11%: each bar's first note now starts near where the last one ended (an octave away in the scale is the same note).
 - Still true: palettes themselves are hand-picked per genre; this fixes how they are used, not whether every palette is perfect.
+
+## v34 — Fix for music that stutters ("old tape") after playing a while
+- Cause: the scheduler only looked 1.6 s ahead and was woken by a main-thread timer. Browsers throttle those timers when the page is in the background or the screen is off (one tick a second, or one a minute after about five minutes), so the next bar was not scheduled in time and the music paused and restarted off the beat.
+- The scheduler clock now runs in a Web Worker (not throttled), with the old timer kept as a backup, and while the page is hidden music is scheduled 24 s ahead so the audio thread keeps playing without the page waking up.
+- Not covered: a phone that kills the page outright to save memory or battery; and the page being frozen for seconds by other heavy work (the existing quality governor still handles that).
