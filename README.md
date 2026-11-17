@@ -348,3 +348,11 @@ Sources: producelikeapro (Fela), Sound On Sound (Burna Boy), Roland/beatstorapon
 - New CC0 recordings (VCSL via danigb/samples): world percussion (congas, cowbell, shaker, claps, claves, tambourine) now used by amapiano, Afrobeats and phonk instead of synthesized hand percussion; a real wooden log drum layered under the synthesized log drum; real mbira and balafon (African pitched idiophones) as leads/arps in amapiano, Afrobeats, Afrobeat; real cowbell for the phonk lead. Kick, snare and hats stay synthesized. Credits in `public/samples/CREDITS.txt`.
 - Not used on purpose: the Jeff Learman Rhodes (samples marked CC BY-NC) and the TR-808 sample set (no clear license).
 - 👎 now opens a "What's off?" sheet: genre sound, drums, bass, melody, instruments, busy/empty, tempo, mix, boring, plus "closer to…". Notes are kept on the device, attached to the composer log, and included in its copied text.
+
+## v32 — More instruments, real electronic drums, real DJ FX
+- **Electronic drum recordings** for amapiano, afrobeats, phonk and trap (`drums-ama/afrob/phonk`): real kick, snare, hats and open hats plus conga, claps, rim, shaker, tambourine. Before this only the percussion was real and the kick/snare/hats were synthesized.
+- **Real 808** (`bass808`): a recorded 808 pitched to the note, with the glide/slide between notes. The synthesized 808 remains the fallback.
+- **New instruments**: `whistle` (amapiano lead), `harmonica` (blues / rock and roll lead), `fmpiano` (DX-style electric piano for amapiano, afrobeats, house, R&B).
+- **DJ FX**: real scratch, backspin and tape-rewind recordings are used in mixes (the synthesized ones play if they cannot load).
+- **Voice drop-in**: `public/samples/djvox/manifest.json` (empty by default). Put clips you own in that folder and list them by category (`drop`, `tag`, `hype`, `adlib`); "drop" clips play on big transition hits. No spoken shout-outs ship, because no freely redistributable ones were found.
+- Service worker cache `v52`, engine `?v=34`.

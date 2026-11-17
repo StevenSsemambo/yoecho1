@@ -32,5 +32,11 @@ The "vox", "hum" and synthetic fall-back voices are generated in the browser (no
 
 World percussion and African pitched instruments (v31): from the Versilian Community Sample Library (VCSL), released under CC0 1.0 (public domain;
 https://github.com/sgossner/VCSL), via danigb/samples (https://github.com/danigb/samples). Used: conga, cowbell, small shaker, claps, claves, tambourine
-(bank "drums-world"), slit/log drum ("logdrum"), mbira dzaVadzimu ("mbira"), balafon soft mallet ("balafon"), cowbell ("cowbell").
+(now inside the per-style drum banks), slit/log drum ("logdrum"), mbira dzaVadzimu ("mbira"), balafon soft mallet ("balafon"), cowbell ("cowbell").
 Trimmed, level-matched and re-encoded as small mp3s.
+
+Electronic drums, real 808 bass and turntable sounds (v32): kick, snare, hi-hat and open-hat recordings, the pitched 808 ("bass808"), and the vinyl
+scratch / backspin / tape-rewind sounds come from "sample-pi" (freesound.org uploads released under CC0 1.0), via danigb/samples. They sit in the banks
+"drums-ama", "drums-afrob" and "drums-phonk" (with the VCSL percussion above), "bass808" and fx/.
+Whistle (soprano recorder, "whistle"), harmonica (Hohner Special 20, "harmonica") and FM electric piano ("fmpiano", from user-made Yamaha TX81Z hardware
+patches): Versilian Community Sample Library, CC0 1.0, via danigb/samples.
