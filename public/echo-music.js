@@ -656,6 +656,15 @@
       for (i = 1; i < on.length; i++) if (!(on[i] > on[i - 1])) ok = false;
       if (ok && on.every(isFinite) && deg.every(isFinite)) out.motif = { on: on, deg: deg };
     }
+    if (out.style) {
+      var rej = [];
+      if (out.band) { out.band = purgeBand(out.style, out.band, rej, "") || undefined; }
+      out.sections.forEach(function (sx, ix) {
+        if (sx.band) sx.band = purgeBand(out.style, sx.band, rej, "section " + ix + " ");
+        if (sx.dbl && !fits(out.style, sx.dbl.i)) { rej.push("section " + ix + " double: " + sx.dbl.i); sx.dbl = null; }
+      });
+      if (rej.length) out.rejected = rej;
+    }
     return out;
   }
 
@@ -778,6 +787,10 @@
     })();
     cur = "orch";
     (function () {
+      if (pl.rejected && pl.rejected.length) {
+        var st0 = STYLES[pl.style], ex = st0 && st0.pal ? ["lead", "comp", "pad"].map(function (r) { return r + ": " + (st0.pal[r] || []).slice(0, 4).join("/"); }).join("; ") : "";
+        note("These instruments do not belong in " + (st0 ? st0.name : pl.style) + " and were dropped: " + pl.rejected.join(", ") + ". Pick instruments that suit the genre (" + ex + ").", 7);
+      }
       var base = pl.band || {}, famOf = function (nm) { return nm && INSTR_META[nm] ? INSTR_META[nm].fam : ""; };
       function eff(sx) { var b = {}, r; BAND_ROLES.forEach(function (k) { b[k] = base[k]; if (sx.band && sx.band[k] !== undefined) b[k] = sx.band[k]; }); return b; }
       function layers(sx) { var b = eff(sx), n = 0; ["pad", "comp", "lead", "arp", "ans"].forEach(function (k) { if (b[k] !== "none" && !(k === "lead" && sx.lead === "none")) n++; }); if (sx.dbl) n++; if (sx.bass !== false && b.bass !== "none") n++; return n; }
@@ -852,7 +865,7 @@
     var plan = pc.comp.spec.plan, raw = P.lastBrief && (P.lastBrief.planSrc || P.lastBrief.plan), done = 0, secs = o.sections || {};
     plan.sections.forEach(function (ps) {
       var m = secs[ps.src]; if (!m || typeof m !== "object") return;
-      var b = parseBandObj(m.band), d = parseDouble(m.double); if (!b && !d) return;
+      var b = parseBandObj(m.band), d = parseDouble(m.double); if (plan.style) { b = purgeBand(plan.style, b); if (d && !fits(plan.style, d.i)) d = null; } if (!b && !d) return;
       ps.band = b; ps.dbl = d; done++;
       if (raw && typeof raw === "object" && Array.isArray(raw.sections) && raw.sections[ps.src]) { var rs = raw.sections[ps.src]; if (b) rs.band = m.band; else delete rs.band; if (d) rs.double = m.double; else delete rs.double; }
     });
@@ -954,6 +967,48 @@
   var INSTR_ALIAS = { electricguitar: "eguitar", cleanguitar: "eguitar", distortedguitar: "dguitar", distortion: "dguitar", rhythmguitar: "dguitar", leadguitar: "lguitar", electricbass: "ebass", bassguitar: "ebass", fingerbass: "ebass", uprightbass: "upbass", doublebass: "upbass", acousticbass: "upbass",
                       voice: "vox", vocal: "vox", vocals: "vox", singer: "vox", singing: "vox", la: "vox", lala: "vox", aah: "vox", humming: "hum", mm: "hum", oohs: "ooh", voiceoohs: "ooh", oohvoice: "ooh", synthvoice: "synthchoir", vocoder: "synthchoir", syntchoir: "synthchoir", hammondorgan: "hammond", b3: "hammond", horn: "horns", hornsection: "horns", brasssection: "horns", clavinet: "clav", saxophone: "sax", keyboard: "keys", electricpiano: "keys", rhodes: "keys", string: "strings", harps: "harp", orchestralharp: "harp", electricpiano: "keys", organ2: "organ", pipeorgan: "organ", churchorgan: "organ", marimbas: "marimba", clavinet: "clav" };
   function normInstr(n) { var k = String(n || "").toLowerCase().replace(/[^a-z0-9]/g, ""); return INSTR_ALIAS[k] || k; }
+  /* genre fit: the instruments that really belong in each genre (the style palette, its bands, and the sensible extras). Anything outside this list is "foreign":
+   * a model-written plan or an automatic choice may not put it in, because an instrument that does not belong is what makes a piece sound random. */
+  var VOICES = "vox hum ooh choir synthchoir";
+  var FIT_EXTRA = {
+    afrobeats: "pad strings choir ooh hum vox synthchoir eguitar guitar keys fmpiano marimba mbira balafon kalimba pluck bells sax flute brass horns whistle piano sub 808 ebass log clav",
+    afrobeat: "organ strings pad hammond eguitar keys fmpiano clav sax brass horns balafon marimba guitar ebass upbass vox hum choir ooh mbira flute",
+    amapiano: "pad strings keys fmpiano piano marimba mbira bells flute whistle kalimba pluck log sub choir ooh vox hum synthchoir sax balafon eguitar guitar",
+    lofi: "pad strings keys fmpiano piano guitar eguitar sax kalimba flute bells pluck clav vox hum ooh sub upbass ebass 808 harp",
+    house: "pad strings organ piano keys fmpiano synth bells pluck sax brass horns synthbass sub choir vox ooh synthchoir hum clav",
+    trap: "pad choir ooh hum vox synthchoir keys bells pluck synth flute cowbell 808 sub strings piano kalimba harp fmpiano",
+    phonk: "pad choir ooh hum vox synthchoir keys bells pluck synth cowbell 808 sub strings piano kalimba flute fmpiano",
+    memphis: "pad choir ooh hum vox synthchoir keys bells pluck synth cowbell 808 sub strings piano kalimba fmpiano flute",
+    rnb: "pad strings keys fmpiano piano guitar eguitar sax flute violin bells kalimba clav vox hum ooh choir synthchoir sub 808 ebass synthbass harp pluck",
+    ambient: "pad strings choir ooh hum vox synthchoir piano bells kalimba harp flute violin guitar pluck keys fmpiano sub",
+    cinematic: "pad strings choir ooh hum vox synthchoir piano bells kalimba harp flute violin brass horns guitar pluck keys sub 808 upbass",
+    acoustic: "pad strings piano guitar flute violin kalimba harp bells pluck keys marimba ooh hum vox choir upbass sub harmonica",
+    rock: "dguitar lguitar eguitar guitar hammond organ strings piano ebass harmonica vox ooh sax keys",
+    rocknroll: "eguitar lguitar guitar piano hammond organ sax horns harmonica upbass ebass vox",
+    blues: "hammond organ eguitar lguitar guitar piano harmonica sax brass horns upbass ebass keys vox",
+    jazz: "piano keys fmpiano sax brass horns marimba eguitar guitar hammond organ upbass ebass flute violin strings pad hum vox clav harp",
+    reggae: "hammond organ eguitar clav keys sax flute horns guitar piano marimba ebass upbass sub vox hum ooh brass",
+    funk: "hammond clav eguitar keys fmpiano piano sax lguitar horns brass ebass synthbass synth upbass organ flute ooh vox",
+    pop: "pad strings piano eguitar keys fmpiano guitar synth flute bells pluck kalimba sax vox hum ooh choir synthchoir ebass synthbass sub 808 harp violin",
+    hiphop: "pad strings piano keys fmpiano eguitar guitar sax bells kalimba flute clav pluck vox hum ooh choir synthchoir sub 808 upbass ebass synth brass horns"
+  };
+  var FIT = {};
+  (function () {
+    Object.keys(STYLES).forEach(function (sn) {
+      var set = {}, st = STYLES[sn], add = function (n) { if (n && n !== "none") set[n] = 1; };
+      (FIT_EXTRA[sn] || "").split(" ").forEach(add);
+      if (st.pal) Object.keys(st.pal).forEach(function (r) { (st.pal[r] || []).forEach(add); });
+      (st.bands || []).forEach(function (b) { Object.keys(b).forEach(function (r) { add(b[r]); }); });
+      FIT[sn] = set;
+    });
+  })();
+  /* drop instruments that do not belong in the genre from a band object; returns what was removed */
+  function purgeBand(style, b, out, where) {
+    if (!b || !style) return b; var k, res = {}, any = false;
+    for (k in b) { if (b[k] !== "none" && !fits(style, b[k])) { if (out) out.push((where || "") + k + ": " + b[k]); } else { res[k] = b[k]; any = true; } }
+    return any ? res : null;
+  }
+  function fits(style, inst) { var f = FIT[style]; return !f || (STYLES[style] && STYLES[style].solo) || !inst || inst === "none" || !!f[inst]; }
   function pickInstrument(role, style, recipe, rng, taken, forced) {
     var cands = STYLES[style].pal[role].slice();
     if (!cands.length && !forced) return null;
@@ -963,8 +1018,8 @@
     cands.forEach(function (n, i) {
       var meta = INSTR_META[n], w = 1.4 - i * 0.25;
       if (meta) {
-        w *= 1.2 - Math.abs(meta.b - recipe.bright);
-        if (taken && taken.fam && (role === "lead" || role === "arp") && meta.fam === taken.fam) w *= 0.25;
+        w *= Math.max(.12, 1.25 - 1.6 * Math.abs(meta.b - recipe.bright));
+        if (taken && (role === "lead" || role === "arp")) { var tk = Array.isArray(taken) ? taken : [taken]; tk.forEach(function (x) { if (x && x.fam && meta.fam === x.fam) w *= 0.25; }); }
       }
       map[n] = Math.max(0.05, w);
     });
@@ -976,7 +1031,7 @@
     pal.pad = pickInstrument("pad", style, recipe, rng, null, forced.pad);
     pal.comp = pickInstrument("comp", style, recipe, rng, null, forced.comp);
     pal.lead = pickInstrument("lead", style, recipe, rng, INSTR_META[pal.comp], forced.lead);
-    pal.arp = pickInstrument("arp", style, recipe, rng, INSTR_META[pal.lead], forced.arp);
+    pal.arp = pickInstrument("arp", style, recipe, rng, [INSTR_META[pal.lead], INSTR_META[pal.comp]], forced.arp);
     pal.bass = pickInstrument("bass", style, recipe, rng, null, forced.bass);
     /* a band: instruments chosen to belong together in this genre (null = that part sits out) */
     var bands = STYLES[style].bands, band = bands && bands.length ? bands[rng.int(bands.length)] : null;
@@ -986,7 +1041,7 @@
     pal.ans = null; if (STYLES[style].solo) return pal;
     if (forced.ans) { pal.ans = forced.ans === "none" ? null : forced.ans; return pal; }
     if (band && band.ans !== undefined) { pal.ans = band.ans; return pal; }
-    for (var tries = 0; tries < 4 && !pal.ans; tries++) { var c = pickInstrument("lead", style, recipe, rng, INSTR_META[pal.lead], null); if (c !== pal.lead && c !== pal.comp && INSTR_META[c]) pal.ans = c; }
+    for (var tries = 0; tries < 8 && !pal.ans; tries++) { var c = pickInstrument("lead", style, recipe, rng, [INSTR_META[pal.lead], INSTR_META[pal.comp]], null); if (c !== pal.lead && c !== pal.comp && INSTR_META[c] && (tries > 5 || !INSTR_META[pal.lead] || INSTR_META[c].fam !== INSTR_META[pal.lead].fam)) pal.ans = c; }
     return pal;
   }
   function pickStyle(recipe, rng, forced) {
@@ -1213,8 +1268,11 @@
       if (mode === "sparse") {
         if ((cb % harm) !== 0 || !rng.chance(.78)) return out;
         var cands = [0, 2, 4, 7, 9].map(function (x) { return x + (rng.chance(.5) ? 0 : 0); }).filter(function (d) { return inChord(pcs, d) || d === 9; });
-        var deg = rng.pick(cands.length ? cands : [4]), s = rng.pick([0, 2, 4]);
+        var cl = cands.length ? cands : [4];
+        if (S.lastLead && S.lastLead.sec === S.secNo) { var lm = S.lastLead.m; cl = cl.slice().sort(function (x, y) { return Math.abs(orig + ls(x) - lm) - Math.abs(orig + ls(y) - lm); }).slice(0, 2); }
+        var deg = rng.pick(cl), s = rng.pick([0, 2, 4]);
         out.push({ s: s, r: "lead", i: S.pal.lead, m: orig + ls(deg), d: Math.min(harm * 16 - s - 2, 14), v: v0 * .9, p: 1 });
+        S.lastLead = { m: orig + ls(deg), sec: S.secNo };
         if (rng.chance(.35)) out.push({ s: s + 8, r: "lead", i: S.pal.lead, m: orig + ls(deg + rng.pick([-1, 1, 2])), d: 5, v: v0 * .75, p: 1 });
         return out;
       }
@@ -1238,6 +1296,12 @@
         var legato = (k === n - 1 && atPhraseEnd) ? 1.12 : .95 + rng() * .1;
         var d = Math.max(1, Math.min(len, 12) * artic * legato);
         if (k === n - 1 && atPhraseEnd && rng.chance(.25)) continue;
+        /* voice leading: the first note of a bar starts near where the last bar ended (an octave away in the scale is the same note), so the tune flows instead of jumping */
+        if (prevM === null && S.lastLead && S.lastLead.sec === S.secNo) {
+          var dist0 = Math.abs(orig + ls(deg2) - S.lastLead.m), per = lscale().length, sh, bestD = deg2;
+          if (dist0 > 7) for (sh = -1; sh <= 1; sh += 2) { var d3 = deg2 + sh * per; if (d3 >= -3 && d3 <= per * 2 && Math.abs(orig + ls(d3) - S.lastLead.m) < Math.abs(orig + ls(bestD) - S.lastLead.m)) bestD = d3; }
+          deg2 = bestD;
+        }
         var nm = orig + ls(deg2), contour = .9 + .16 * Math.sin(Math.PI * (pb * 16 + step) / 64);
         var evn = { s: step, r: "lead", i: S.pal.lead, m: nm, d: d, v: v0 * (step % 4 === 0 ? 1 : .82) * contour * (1 + (rng() - .5) * .12), p: 1 };
         /* a player slides between close notes and sometimes pushes into a note from beside it */
@@ -1246,6 +1310,7 @@
         out.push(evn); prevM = nm;
         if (rich && step % 4 === 0 && rng.chance(.7)) out.push({ s: step, r: "lead", i: S.pal.ans, m: lo56(orig + ls(deg2 - 2)), d: d, v: evn.v * .55, p: 2, ans: 1 });
       }
+      if (prevM !== null) S.lastLead = { m: prevM, sec: S.secNo };
       return out;
     }
     function lo56(x) { return x < 56 ? x + 12 : x; }
@@ -1582,6 +1647,8 @@
       if (SOLO || spec.drums || (S.style && S.style.solo)) return null;
       if (ps && (ps.dbl || (ps.band && (isVoiceName(ps.band.pad) || isVoiceName(ps.band.lead) || isVoiceName(ps.band.comp) || isVoiceName(ps.band.ans))))) return null;
       if (isVoiceName(S.pal.pad) || isVoiceName(S.pal.lead) || isVoiceName(S.pal.comp) || isVoiceName(S.pal.ans)) return null;
+      var susN = 0; ["pad", "comp", "lead", "arp", "ans"].forEach(function (r) { var m = INSTR_META[S.pal[r]]; if (m && (m.fam === "sus" || m.fam === "bowed")) susN++; });
+      if (susN >= 2 && S.styleName !== "cinematic" && S.styleName !== "ambient") return null;
       var sn = S.styleName, mood = spec.stages[Math.max(0, S.stage)].mood, w = /chorus|drop|climax|swell|rise/.test(sec.kind) ? 1 : (sec.kind === "bridge" && sec.e > .5) ? .8 : /break|release/.test(sec.kind) ? .6 : (sec.kind === "verse" && ({ rnb: 1, lofi: 1, acoustic: 1, pop: 1, afrobeats: 1, amapiano: 1, cinematic: 1 })[sn]) ? .3 : 0;
       if (!w) return null;
       var b = voxBase() * VOX.amt; if (b <= 0) return null;
@@ -1589,7 +1656,8 @@
       if (!first && !rng.chance(Math.min(.95, b * 1.15) * w * (sec.e > .7 ? 1 : .8))) return null;
       S.voxShown = true;
       var inst = (sn === "cinematic" || mood === "sadness" || mood === "fear") ? "choir" : (sn === "ambient" || sn === "acoustic") ? "ooh" : (rng.chance(.5) ? "ooh" : "synthchoir");
-      var dbl = ({ afrobeats: 1, amapiano: 1, rnb: 1, lofi: 1, acoustic: 1, pop: 1 })[sn] && sec.lead !== "none" && rng.chance(.55) ? { i: "hum", o: rng.pick([0, 12]) } : null;
+      if (!fits(sn, inst)) { inst = ["ooh", "hum", "choir", "synthchoir"].filter(function (n) { return fits(sn, n); })[0]; if (!inst) return null; }
+      var dbl = ({ afrobeats: 1, amapiano: 1, rnb: 1, lofi: 1, acoustic: 1, pop: 1 })[sn] && fits(sn, "hum") && sec.lead !== "none" && rng.chance(.55) ? { i: "hum", o: rng.pick([0, 12]) } : null;
       return { i: inst, dbl: dbl };
     }
     function voxPal() { if (SOLO || spec.drums || voxBase() < .45) return S.pal; var o = {}, k; for (k in S.pal) o[k] = S.pal[k]; o.vx1 = (S.styleName === "cinematic" || (spec.stages[Math.max(0, S.stage)].mood === "sadness")) ? "choir" : "ooh"; return o; }
@@ -3460,7 +3528,7 @@
     samples: { setBase: function (u) { SMP.base = u; }, memory: function () { return { mb: +(smpBytes() / 1048576).toFixed(1), budgetMB: +(smpBudget() / 1048576).toFixed(0), banks: Object.keys(SMP.banks).filter(function (k) { return SMP.banks[k].ready; }).length }; }, setBudgetMB: function (n) { SMP.budgetMB = n; }, enable: function (on) { SMP.on = !!on; }, enabled: function () { return SMP.on; }, status: function () { var o = {}; for (var k in SMP.banks) o[k] = SMP.banks[k].ready ? "ready" : SMP.banks[k].failed ? "failed" : "loading"; return o; }, preload: function (names) { var c = ensureCtx(); if (c) (names || Object.keys(SMAP).map(function (k) { return SMAP[k].bank; }).concat(["drums-acoustic", "drums-lm2"])).forEach(function (b) { smpGet(b, c); }); } },
     mix: mix, mixNext: mixNext, mixInfo: mixInfo, buildMixPlan: buildMixPlan, renderMix: renderMix,
     render: render, toWav: toWav, exportWav: exportWav, exportMixWav: exportMixWav,
-    _t: { parsePlan: parsePlan, DRUMBANK: DRUMBANK, SMP: SMP, SMAP: SMAP, ctx: function () { return P.ctx; }, Composer: Composer, Engine: Engine, LOUD: LOUD, STYLES: STYLES, RECIPES: RECIPES, KITS: KITS, STRIPS: STRIPS }
+    _t: { INSTR_META: INSTR_META, FIT: FIT, fits: fits, parsePlan: parsePlan, DRUMBANK: DRUMBANK, SMP: SMP, SMAP: SMAP, ctx: function () { return P.ctx; }, Composer: Composer, Engine: Engine, LOUD: LOUD, STYLES: STYLES, RECIPES: RECIPES, KITS: KITS, STRIPS: STRIPS }
   };
   global.EchoMusic = API;
   if (typeof module !== "undefined" && module.exports) module.exports = API;

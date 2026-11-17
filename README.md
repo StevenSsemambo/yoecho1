@@ -356,3 +356,11 @@ Sources: producelikeapro (Fela), Sound On Sound (Burna Boy), Roland/beatstorapon
 - **DJ FX**: real scratch, backspin and tape-rewind recordings are used in mixes (the synthesized ones play if they cannot load).
 - **Voice drop-in**: `public/samples/djvox/manifest.json` (empty by default). Put clips you own in that folder and list them by category (`drop`, `tag`, `hype`, `adlib`); "drop" clips play on big transition hits. No spoken shout-outs ship, because no freely redistributable ones were found.
 - Service worker cache `v52`, engine `?v=34`.
+
+## v33 — Composer and instrument-choice audit
+Audit over 20 genres x 8 moods x 6 seeds (scripts kept outside the repo). Found and fixed:
+- **Off-genre instruments.** The automatic voice layer put synth choir / choir / ooh into rock, blues, reggae, funk, lo-fi and Fela afrobeat (up to 170 bars per 1,900). Voices now have to fit the genre, are skipped when two sustained instruments already play, and fall back to a voice the genre uses.
+- **Model-written plans could use any instrument in any genre.** There is now a genre-fit table (`FIT`): bells in rock, kalimba in a blues band, etc. are dropped, and the critic tells the model what was dropped and what the genre does use. The in-app prompt lists the instruments per genre.
+- **Answer voice and lead of the same family** (4% of bars) is now 0; the arpeggio avoids the family of both the lead and the chords; mood brightness weighs more in the choice.
+- **Melody jumps between bars** (17-28% of adjacent bars jumped more than a fifth) are down to 3-11%: each bar's first note now starts near where the last one ended (an octave away in the scale is the same note).
+- Still true: palettes themselves are hand-picked per genre; this fixes how they are used, not whether every palette is perfect.
