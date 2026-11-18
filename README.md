@@ -392,3 +392,6 @@ Audit over 20 genres x 8 moods x 6 seeds (scripts kept outside the repo). Found 
 
 ## v39 – Celtic / Enya-style genre
 New style `celtic` ("Celtic (Enya-style)"): slow modal harmony (aeolian, ionian, dorian, lydian), rolling harp/piano arpeggio, choir/pad bed, flute/whistle/violin/vox lead with ooh layering, deep sub drone, only soft timpani, big reverb. New `ethereal` arc. Ask: "play Enya-style music", "play celtic". Original music in the style, not copies of any song.
+
+## v40 – Enya style, second pass
+From production write-ups (MusicRadar, Sound On Sound/muzines): Enya played parts rather than sequencing, used no compression, huge Lexicon reverb, stacked vocals, pizzicato strings (Roland D-50 "Pizzagogo") and live timpani; about half the album is slow rubato, but Orinoco Flow is mid-tempo G Mixolydian I-VII-IV. The celtic style now spans 62-112 bpm, adds I-VII-IV, I-iii-V and I-IV-V progressions, and a plucked-string (pizzicato) lead/arp band.
