@@ -194,6 +194,42 @@ const DEBATES=[
   {tag:"RELATIONSHIPS",position:"Most adults still run relationship strategies designed for an eight-year-old trying to be loved.",challenge:"What's the relationship move you keep making that never works?"},
 ];
 
+// ── Debate topics are written fresh by the AI every time; the six above are only the fallback when the AI cannot be reached ──
+const DEB_SEEN_KEY="yoecho_debate_seen";
+const DEB_KEY=pid=>"yoecho_debate_"+(pid||"anon");
+const DEB_CATS=["PERSONAL","SOCIETY","TECH","RELATIONSHIPS","WORK","MONEY","EDUCATION","HEALTH","CULTURE","ETHICS","PHILOSOPHY","SCIENCE","CREATIVITY","AMBITION","FAMILY","FRIENDSHIP","MEDIA","FREEDOM","AFRICA","FAILURE"];
+const DEB_ANGLES=["a claim most people believe that is quietly wrong","a popular piece of advice that does harm","an uncomfortable truth people avoid saying","something we treat as a virtue that is really a vice","something we treat as a vice that is really useful","a trade-off people pretend does not exist","a habit of modern life that future generations will find strange","a rule that exists mostly out of fear","an idea that sounds noble but fails in practice","an everyday assumption that deserves to be attacked","a surprising defence of something unfashionable","a question where both sides have a real case"];
+const debTokens=t=>String(t||"").toLowerCase().replace(/[^a-z0-9 ]/g," ").split(/\s+/).filter(w=>w.length>3);
+const debSimilar=(a,b)=>{ const A=new Set(debTokens(a)),B=new Set(debTokens(b)); if(!A.size||!B.size) return false; let n=0; A.forEach(w=>{ if(B.has(w)) n++; }); return n/Math.min(A.size,B.size)>.6; };
+function debSeen(){ try{ const l=JSON.parse(localStorage.getItem(DEB_SEEN_KEY)||"[]"); return Array.isArray(l)?l:[]; }catch(e){ return []; } }
+function debRemember(pos){ try{ const l=debSeen().concat([pos]).slice(-40); localStorage.setItem(DEB_SEEN_KEY,JSON.stringify(l)); }catch(e){} }
+async function makeDebateTopic(){
+  const seen=debSeen();
+  for(let attempt=0;attempt<2;attempt++){
+    const cat=pick(DEB_CATS), angle=pick(DEB_ANGLES), nonce=Math.random().toString(36).slice(2,8);
+    const sys="You write debate topics for an AI companion called YoEcho. Reply with one JSON object only: no markdown, no commentary, no MOOD prefix.";
+    const ask=`Invent ONE fresh, original debate topic.
+Category: ${cat}. Angle: ${angle}. (variation code ${nonce})
+Return exactly: {"tag":"${cat}","position":"...","challenge":"..."}
+- position: a bold, specific stance YoEcho will defend, 1-2 sentences, under 220 characters, a statement and not a question, genuinely arguable with strong arguments on both sides.
+- challenge: one pointed question put to the user about their own life or views, under 140 characters.
+- It must be clearly different from these earlier topics:
+${seen.slice(-12).map(x=>"  - "+x).join("\n")||"  (none yet)"}`;
+    try{
+      const raw=await callClaude([{role:"user",content:ask}],sys);
+      const m=String(raw).match(/\{[\s\S]*\}/); if(!m) continue;
+      const o=JSON.parse(m[0]);
+      const position=String(o.position||"").trim().replace(/^["“]|["”]$/g,""), challenge=String(o.challenge||"").trim();
+      if(position.length<25||position.length>320||challenge.length<10) continue;
+      if(seen.some(x=>debSimilar(x,position))) continue;
+      debRemember(position);
+      return {tag:String(o.tag||cat).toUpperCase().replace(/[^A-Z ]/g,"").slice(0,16)||cat,position,challenge};
+    }catch(e){ /* try once more, then fall back */ }
+  }
+  const fresh=DEBATES.filter(d=>!seen.some(x=>debSimilar(x,d.position)));
+  const t=pick(fresh.length?fresh:DEBATES); debRemember(t.position); return t;
+}
+
 const BELIEFS_DB=[
   {belief:"you are not enough",signals:["not good enough","failing","behind","disappoint","always struggle","never enough","keep failing","feel like a failure","let everyone down","not measuring up"],inference:"I think you carry a quiet belief that you are not enough. It shows up in how you talk about almost everything.",threshold:2},
   {belief:"you do not deserve good things",signals:["don't deserve","too good for me","feel bad about","can't enjoy","shouldn't have","feel guilty when","not meant for me","too lucky","shouldn't be happy"],inference:"There's a pattern of pulling back from good things. Part of you seems to believe you don't quite deserve them.",threshold:2},
@@ -2540,7 +2576,9 @@ function YoEcho(){
   const[jText,setJText]      =useState("");
   const[jBusy,setJBusy]      =useState(false);
   const[jReply,setJReply]    =useState(null);
-  const[debateIdx,setDebateIdx]=useState(0);
+  const[debateTopic,setDebateTopic]=useState(null);     // {tag,position,challenge}: written by the AI each time
+  const[debateLoading,setDebateLoading]=useState(false);
+  const[debateResumed,setDebateResumed]=useState(false); // true = this is an unfinished debate brought back
   const[debateMsgs,setDebateMsgs]=useState([]);
   const[debateIn,setDebateIn]  =useState("");
   const[debateBusy,setDebateBusy]=useState(false);
@@ -3000,7 +3038,7 @@ What was your real first thought — before the polished reply?`}],
     setDebateBusy(true); setDebateIn("");
     const uMsg={role:"user",content:text};
     setDebateMsgs(p=>[...p,uMsg]);
-    const d=DEBATES[debateIdx%DEBATES.length];
+    const d=debateTopic||DEBATES[0]; setDebateResumed(false);
     const sys=DEBATE_SYS(d.position,d.tag);
     try{
       const history=[...debateMsgs,uMsg];
@@ -3016,10 +3054,31 @@ What was your real first thought — before the polished reply?`}],
       if(conceded) setDebateActive(false);
     }catch(e){setDebateMsgs(p=>[...p,{role:"echo",content:friendlyErrorMsg(e)}]);}
     setDebateBusy(false);
-  },[debateIn,debateBusy,debateMsgs,debateIdx,profileId,applyMood,echoSpeak]);
+  },[debateIn,debateBusy,debateMsgs,debateTopic,profileId,applyMood,echoSpeak]);
 
   const debateMicToggle=useCallback(()=>{toggleMic(final=>{setDebateIn(final);setTimeout(()=>sendDebate(final),80);});},[toggleMic,sendDebate]);
   const debateEnd=useRef();
+  // a new topic, written by the AI (the old debate, if any, is dropped)
+  const newDebateTopic=useCallback(async()=>{
+    if(debateLoading) return;
+    setDebateLoading(true); setDebateMsgs([]); setDebateActive(false); setDebateResumed(false);
+    try{ localStorage.removeItem(DEB_KEY(profileId)); }catch(e){}
+    const t=await makeDebateTopic();
+    setDebateTopic(t); setDebateLoading(false);
+  },[debateLoading,profileId]);
+  // opening the Debates screen: bring back an unfinished debate, otherwise a brand-new topic
+  useEffect(()=>{
+    if(screen!=="debate") return;
+    if(debateActive&&debateTopic){ if(debateMsgs.length) setDebateResumed(true); return; }
+    let sv=null; try{ sv=JSON.parse(localStorage.getItem(DEB_KEY(profileId))||"null"); }catch(e){}
+    if(sv&&sv.topic&&Array.isArray(sv.msgs)&&sv.msgs.length&&Date.now()-(sv.ts||0)<14*864e5){ setDebateTopic(sv.topic); setDebateMsgs(sv.msgs); setDebateActive(true); setDebateResumed(true); return; }
+    newDebateTopic();
+  },[screen]); // eslint-disable-line
+  // keep an unfinished debate saved; a finished one is forgotten
+  useEffect(()=>{
+    if(!debateTopic) return;
+    try{ const k=DEB_KEY(profileId); if(debateActive&&debateMsgs.length) localStorage.setItem(k,JSON.stringify({topic:debateTopic,msgs:debateMsgs.slice(-60),ts:Date.now()})); else if(!debateActive) localStorage.removeItem(k); }catch(e){}
+  },[debateMsgs,debateActive,debateTopic,profileId]);
 
   // ── WISER ───────────────────────────────────────────────────────────────────
   const bootWiser=useCallback(async()=>{
@@ -3413,30 +3472,23 @@ What was your real first thought — before the polished reply?`}],
 
   // ── DEBATE ────────────────────────────────────────────────────────────────────
   if(screen==="debate"){
-    const d=DEBATES[debateIdx%DEBATES.length];
+    const d=debateTopic||{tag:"…",position:"",challenge:""};
     // ── LOBBY: pick a topic ──────────────────────────────────────────────────
     if(!debateActive&&debateMsgs.length===0) return(
       <div style={{position:"fixed",inset:0,display:"flex",flexDirection:"column",fontFamily:SF}}>
         <style>{CSS}</style><Bg mood={mood}/>
         <Hdr title="YOECHO DEBATES" sub="YoEcho holds a position · argue it down" onBack={()=>setScreen("home")} mood={mood}
-          right={<button onClick={()=>{setDebateIdx(i=>(i+1)%DEBATES.length);setDebateMsgs([]);setDebateActive(false);}}
+          right={<button onClick={()=>newDebateTopic()} disabled={debateLoading}
             style={{background:"rgba(196,168,130,.09)",border:"1px solid rgba(196,168,130,.24)",borderRadius:16,padding:"7px 13px",color:m.acc,fontSize:9,letterSpacing:".1em",cursor:"pointer",fontFamily:SS}}>NEXT ›</button>}/>
         <div style={infoS}>
-          {/* Topic selector dots */}
-          <div style={{display:"flex",gap:6,justifyContent:"center",marginBottom:20}}>
-            {DEBATES.map((_,i)=>(
-              <div key={i} onClick={()=>{setDebateIdx(i);setDebateMsgs([]);setDebateActive(false);}}
-                style={{width:i===debateIdx%DEBATES.length?18:6,height:6,borderRadius:3,cursor:"pointer",transition:"all .3s",
-                  background:i===debateIdx%DEBATES.length?m.acc:"rgba(196,168,130,.2)"}}/>
-            ))}
-          </div>
+          <div style={{textAlign:"center",fontSize:9,color:"rgba(196,168,130,.45)",fontFamily:SS,letterSpacing:".14em",marginBottom:18}}>{debateLoading?"ECHO IS CHOOSING A TOPIC…":"A NEW TOPIC, WRITTEN FOR THIS MOMENT"}</div>
           {/* Position card */}
           <div style={{padding:"22px 20px",background:"rgba(168,196,130,.06)",border:"1px solid rgba(168,196,130,.2)",borderLeft:"3px solid #a8c482",borderRadius:17,marginBottom:16}}>
-            <div style={{fontSize:7,color:"#a8c482",letterSpacing:".16em",fontFamily:SS,marginBottom:10,opacity:.7}}>{d.tag} · {debateIdx%DEBATES.length+1}/{DEBATES.length}</div>
+            <div style={{fontSize:7,color:"#a8c482",letterSpacing:".16em",fontFamily:SS,marginBottom:10,opacity:.7}}>{d.tag}</div>
             <div style={{fontSize:8,color:"#a8c482",letterSpacing:".12em",fontFamily:SS,marginBottom:8,opacity:.6,textTransform:"uppercase"}}>ECHO'S POSITION</div>
-            <div style={{fontSize:15,color:"rgba(235,228,216,.88)",lineHeight:1.9,fontStyle:"italic",marginBottom:16}}>"{d.position}"</div>
+            <div style={{fontSize:15,color:"rgba(235,228,216,.88)",lineHeight:1.9,fontStyle:"italic",marginBottom:16,minHeight:40,opacity:debateLoading?.35:1}}>{debateLoading?"…":`"${d.position}"`}</div>
             <div style={{fontSize:8,color:"rgba(168,196,130,.6)",letterSpacing:".1em",fontFamily:SS,marginBottom:6,textTransform:"uppercase"}}>YOUR CHALLENGE</div>
-            <div style={{fontSize:13,color:"rgba(168,196,130,.78)",lineHeight:1.85,fontStyle:"italic"}}>{d.challenge}</div>
+            <div style={{fontSize:13,color:"rgba(168,196,130,.78)",lineHeight:1.85,fontStyle:"italic",minHeight:24,opacity:debateLoading?.35:1}}>{debateLoading?"…":d.challenge}</div>
           </div>
           {/* Rules callout */}
           <div style={{padding:"12px 16px",background:"rgba(196,168,130,.05)",border:"1px solid rgba(196,168,130,.12)",borderRadius:14,marginBottom:20}}>
@@ -3445,11 +3497,11 @@ What was your real first thought — before the polished reply?`}],
             </div>
           </div>
           <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-            <button onClick={()=>startDebate(d)} disabled={debateBusy}
-              style={{flex:2,border:"none",borderRadius:20,padding:"13px 20px",fontSize:10,letterSpacing:".14em",fontFamily:SS,cursor:debateBusy?"not-allowed":"pointer",minHeight:46,
-                background:debateBusy?"rgba(196,168,130,.12)":`radial-gradient(circle at 35% 35%,${m.orb[0]},${m.orb[2]})`,
-                color:debateBusy?"rgba(196,168,130,.3)":"#0c0905"}}>
-              {debateBusy?"ECHO IS THINKING…":"⚡ START DEBATE"}
+            <button onClick={()=>startDebate(d)} disabled={debateBusy||debateLoading||!debateTopic}
+              style={{flex:2,border:"none",borderRadius:20,padding:"13px 20px",fontSize:10,letterSpacing:".14em",fontFamily:SS,cursor:(debateBusy||debateLoading)?"not-allowed":"pointer",minHeight:46,
+                background:(debateBusy||debateLoading||!debateTopic)?"rgba(196,168,130,.12)":`radial-gradient(circle at 35% 35%,${m.orb[0]},${m.orb[2]})`,
+                color:(debateBusy||debateLoading||!debateTopic)?"rgba(196,168,130,.3)":"#0c0905"}}>
+              {debateBusy?"ECHO IS THINKING…":debateLoading?"CHOOSING A TOPIC…":"⚡ START DEBATE"}
             </button>
             <button onClick={()=>speaking?stopEcho():echoSpeak(d.position)}
               style={{background:"rgba(196,168,130,.09)",border:"1px solid rgba(196,168,130,.24)",borderRadius:20,padding:"13px 18px",color:m.acc,fontSize:10,letterSpacing:".1em",cursor:"pointer",fontFamily:SS}}>
@@ -3463,8 +3515,9 @@ What was your real first thought — before the polished reply?`}],
     return(
       <div style={{position:"fixed",inset:0,display:"flex",flexDirection:"column",fontFamily:SF}}>
         <style>{CSS}</style><Bg mood={mood}/>
-        <Hdr title="LIVE DEBATE" sub={debateActive?"YoEcho is holding its ground":"debate concluded"} onBack={()=>{setDebateMsgs([]);setDebateActive(false);}} mood={mood}
+        <Hdr title="LIVE DEBATE" sub={debateActive?"YoEcho is holding its ground":"debate concluded"} onBack={()=>{ if(debateActive) setScreen("home"); else { setDebateMsgs([]); setDebateActive(false); } }} mood={mood}
           right={<div style={{display:"flex",gap:7,alignItems:"center"}}>
+            {debateActive&&<button onClick={()=>{ if(window.confirm("Leave this debate and start a new topic?")) newDebateTopic(); }} style={{background:"rgba(196,168,130,.09)",border:"1px solid rgba(196,168,130,.24)",borderRadius:14,padding:"5px 10px",color:m.acc,fontSize:8,letterSpacing:".1em",cursor:"pointer",fontFamily:SS}}>NEW ›</button>}
             <div style={{fontSize:7,color:"rgba(168,196,130,.5)",fontFamily:SS,letterSpacing:".08em",maxWidth:120,textAlign:"right",lineHeight:1.4}}>{d.tag}</div>
             <Orb size={28} mood={mood} tick={tick} speaking={speaking}/>
           </div>}/>
@@ -3477,6 +3530,7 @@ What was your real first thought — before the polished reply?`}],
         </div>
         {/* Messages */}
         <div style={{...scrollS}}>
+          {debateResumed&&<div style={{textAlign:"center",fontSize:9,color:"rgba(168,196,130,.5)",fontFamily:SS,letterSpacing:".12em",padding:"4px 0 10px"}}>CONTINUING YOUR UNFINISHED DEBATE</div>}
           {debateMsgs.map((msg,i)=>{
             const isUser=msg.role==="user";
             return(
@@ -3501,7 +3555,7 @@ What was your real first thought — before the polished reply?`}],
           {!debateActive&&debateMsgs.length>0&&(
             <div style={{textAlign:"center",padding:"20px 0"}}>
               <div style={{fontSize:11,color:"rgba(168,196,130,.5)",fontFamily:SS,letterSpacing:".1em",marginBottom:14}}>DEBATE CONCLUDED</div>
-              <button onClick={()=>{setDebateMsgs([]);setDebateActive(false);setDebateIdx(i=>(i+1)%DEBATES.length);}}
+              <button onClick={()=>newDebateTopic()}
                 style={{border:"none",borderRadius:20,padding:"11px 24px",fontSize:10,letterSpacing:".12em",fontFamily:SS,cursor:"pointer",
                   background:`radial-gradient(circle at 35% 35%,${m.orb[0]},${m.orb[2]})`,color:"#0c0905"}}>NEXT TOPIC →</button>
             </div>

@@ -374,3 +374,8 @@ Audit over 20 genres x 8 moods x 6 seeds (scripts kept outside the repo). Found 
 - The first message a new person sees now says only the creator's name and that he is the founder of SayMyTech Developers, then explains what YoEcho is for, everything it can do, and how to use it (type or tap the mic, the menu at the top left).
 - The "Meet YoEcho" tour slide was shortened the same way.
 - The system prompt tells YoEcho not to volunteer the creator's background; it shares his studies, the other apps and his mission only when asked. It also now carries a feature list, so YoEcho can explain what it does and how to use it consistently when asked.
+
+## v36 — Debates are written by the AI every time
+- Opening the Debates screen now asks the AI for a brand-new topic (random category and angle, and it is told the last topics so it does not repeat; near-duplicates are rejected and retried). The six written topics are only a fallback if the AI cannot be reached.
+- An unfinished debate (started, not conceded) is saved on the device and brought back, with its messages, the next time Debates is opened, even after closing the app. "NEW ›" in the live header abandons it for a new topic. A finished debate is forgotten.
+- NEXT › in the lobby and NEXT TOPIC after a debate ends both generate a fresh topic.
