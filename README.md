@@ -385,3 +385,7 @@ Audit over 20 genres x 8 moods x 6 seeds (scripts kept outside the repo). Found 
 - **Hook teaser.** The first intro no longer only fades in: its last two bars play the theme on the lead and let the bass walk in, with a soft reversed cymbal into the verse.
 - **Motifs return.** Verses and bridges now quote the opening of the main theme (plain, a step higher on later phrases, or turned upside down in bridges and breaks) instead of wandering on random chord tones.
 - Plan-based pieces (model-written or built-in) get the director too; the teaser only applies to automatic pieces. Engine `?v=37`, cache `v57`.
+
+## v38 — "What's off?" sheet no longer hidden by the bottom bar
+- The sheet opened inside the chat or music card, so it grew down underneath the bottom navigation bar and could not be scrolled into view. It is now a bottom sheet drawn over the whole screen (above the bar), scrolls by itself on short phones, and closes when you tap outside it.
+- The option buttons (Drums, Bass, Melody, …) were drawn white by mistake; they now match the app.
