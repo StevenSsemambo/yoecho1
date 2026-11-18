@@ -401,3 +401,6 @@ Celtic now has a loose, breathing tempo (slow drift, easing at phrase ends), tin
 
 ## v42 – Enya style, from Only Time / Caribbean Blue
 Celtic progressions can now be written as A/B pairs: verse I-vi-IV, chorus vi-IV-V-I (the relative-minor lift heard in Only Time), and IV-vi-V-ii (Caribbean Blue). The melody is capped lower and kept narrower (about an octave, mostly stepwise), as in the originals (B3-C5). 3/4 time is not yet supported.
+
+## v43 – 3/4 waltz time
+The engine can now play bars of three beats (12 sixteenths): the bar is composed as usual, the last beat is cut and long notes are shortened to fit; bar length and scheduling follow. The celtic style plays about 4 in 10 pieces as a waltz at 70-92 bpm (like Caribbean Blue). Other styles are unchanged. Written plans stay in 4/4.

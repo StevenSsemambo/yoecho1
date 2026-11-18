@@ -220,7 +220,7 @@
       arp: { rate: 2, kind: "updown", gate: .6 }, duck: 0, delay: .2, tex: { vinyl: 0, rain: 0, air: .3 } },
     /* Celtic / new age in the manner of Enya: slow, modal harmony (i-VI-III-VII, I-vi-IV), a rolling piano or harp arpeggio, warm synth pads, a flute or whistle line, many layered voices
      * singing "aah", a deep drone underneath, almost no drums (a soft timpani on the big beats) and a very large, soft reverb. */
-    celtic: { name: "Celtic (Enya-style)", leadCap: 68, level: 1.12, lay: .12, wet: 1, rubato: true, bpm: [62, 112], swing: 0, arc: "ethereal", harm: 2, drums: 1, kit: "heavy", feel: "sparse",
+    celtic: { name: "Celtic (Enya-style)", waltz: .4, leadCap: 68, level: 1.12, lay: .12, wet: 1, rubato: true, bpm: [62, 112], swing: 0, arc: "ethereal", harm: 2, drums: 1, kit: "heavy", feel: "sparse",
       drum: { kick: "", snare: "", clap: "", hat: "", open: "", shaker: "", cLo: "", cHi: "", tom: "x.......x......." },
       comp: ["x...............", "x.......x......."], bass: ["r..............."], bassMax: 16,
       progs: [ { m: "aeolian", seq: [[0,"min"],[8,"maj"],[3,"maj"],[10,"maj"]] }, { m: "aeolian", seq: [[0,"min"],[8,"maj"],[10,"maj"],[3,"maj"]] }, { m: "aeolian", seq: [[0,"min"],[10,"maj"],[8,"maj"],[7,"min"]] },
@@ -1187,7 +1187,9 @@
       S.stage = i; S.stageStart = S.barNo; S.recipe = st.recipe; S.styleName = st.style; S.style = PLAN ? Object.assign({}, STYLES[st.style], { harm: 1, progs: null }) : STYLES[st.style];
       if (relative && !S.style.progs && !PLAN) { var nm = rng.pick(st.recipe.modes); S.root = relativeRoot(S.root, S.mode, nm); S.mode = nm; }
       S.pal = makePalette(st.style, st.recipe, rng, spec.forced);
+      S.waltz = !!(S.style.waltz && !PLAN && rng.chance(S.style.waltz));
       S.bpmTarget = spec.bpmForce || computeBpm(S.style, st.recipe);
+      if (S.waltz) S.bpmTarget = clamp(S.bpmTarget, 70, 92);
       if (S.barNo === 0) S.bpm = S.bpmTarget;
       S.arcName = chooseArc(S.style, st.recipe);
       S.arcIdx = (i === 0 || S.barNo === 0) ? (spec.skipIntro ? 1 : 0) : 1;   /* later stages skip the intro: the music is already playing */
@@ -1855,11 +1857,13 @@
       var wet = (S.style.solo ? 1.5 : 1) + (S.style.wet || 0) + ((tpl.k === "break" || tpl.k === "breath" || tpl.k === "bridge") ? .7 : 0) + S.recipe.space * .2;
       var human = S.style.solo ? 1 : spec.drums ? .5 : S.styleName === "jazz" ? .75 : S.styleName === "blues" || S.styleName === "rocknroll" ? .65 : S.styleName === "lofi" ? .85 : (S.styleName === "house" || S.styleName === "trap") ? .12 : .45;
       /* rubato: a solo player breathes with the phrase, easing at phrase ends and drifting slightly otherwise */
+      /* waltz: a 3/4 bar is twelve sixteenths. The bar is written as usual, then the last beat is cut and long notes shortened to fit */
+      if (S.waltz) { ev = ev.filter(function (e) { return e.s < 12; }); ev.forEach(function (e) { if (e.d >= 8 && e.r !== "drums") e.d = Math.max(1, e.d * .75); else if (e.s + e.d > 12.5 && e.r !== "drums") e.d = Math.max(1, 12 - e.s); }); }
       var bpmB = S.bpm;
       if (S.style.rubato) { S.rub = clamp((S.rub || 0) * .85 + (rng() - .5) * .016, -.04, .04); bpmB = S.bpm * (1 + S.rub - ((S.secBar % 4) === 3 ? .045 : 0) - (lastBar ? .05 : 0)); }
       else if (S.style.solo) { S.rub = clamp(S.rub * .8 + (rng() - .5) * .012, -.03, .03); bpmB = S.bpm * (1 + S.rub - ((S.secBar % 4) === 3 ? .035 : 0) - (lastBar ? .03 : 0)); }
       var bar = {
-        idx: S.barNo, bpm: bpmB, stepDur: 60 / bpmB / 4, barDur: 60 / bpmB * 4, swing: S.style.swing, swing8: S.style.swing8 || 0, human: human, events: ev,
+        idx: S.barNo, bpm: bpmB, stepDur: 60 / bpmB / 4, barDur: 60 / bpmB * (S.waltz ? 3 : 4), meter: S.waltz ? 3 : 4, swing: S.style.swing, swing8: S.style.swing8 || 0, human: human, events: ev,
         lay: S.style.lay || 0,
         mix: { wobble: S.style.wobble || 0, cut: cut, wet: wet, duck: S.style.duck, delay: S.style.delay, tex: S.tex, grit: Math.max(S.recipe.grit || 0, S.style.grit || 0), bright: S.recipe.bright, space: S.recipe.space, level: S.style.level || 1, eq: STYLE_EQ[S.styleName] || null },
         strips: PLAN && PLAN.mix || null, palette: voxPal(), kit: S.style.kit, sec: { kind: sec.kind, idx: S.secNo, bar: S.secBar, len: sec.bars, e: sec.e }, secStart: first, stage: S.stage, mood: spec.stages[S.stage].mood, style: S.styleName,
