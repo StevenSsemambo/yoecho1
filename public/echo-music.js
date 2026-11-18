@@ -1268,6 +1268,19 @@
       if (mode === "sparse") {
         if ((cb % harm) !== 0 || !rng.chance(.78)) return out;
         var cands = [0, 2, 4, 7, 9].map(function (x) { return x + (rng.chance(.5) ? 0 : 0); }).filter(function (d) { return inChord(pcs, d) || d === 9; });
+        /* the hook comes back: a verse or bridge quotes the opening of the theme (plain, a step higher, or turned upside down) instead of wandering */
+        if (S.theme && S.theme.m && S.theme.m[0] && rng.chance(.6)) {
+          var th = S.theme.m[0], nq = Math.min(th.on.length, rng.chance(.4) ? 4 : 3), form = /^(bridge|break|breath|drift|release)$/.test(sec.kind) ? "inv" : (Math.floor(S.secBar / 4) % 2 === 1 ? "seq" : "plain"), d0q = th.deg[0], qk, anyQ = false, qOut = [];
+          for (qk = 0; qk < nq; qk++) {
+            var stq = th.on[qk]; if (stq > 11) break;
+            var dg = th.deg[qk]; if (form === "inv") dg = d0q - (dg - d0q) + 1; else if (form === "seq") dg = dg + 1;
+            if (stq % 4 === 0) dg = snapToChord(pcs, dg);
+            dg = clamp(dg, -3, lscale().length * 2);
+            var nxq = qk < nq - 1 ? th.on[qk + 1] : stq + 4, lq = Math.max(1, Math.min(nxq - stq, 6)) * (form === "inv" ? 1.4 : 1);
+            qOut.push({ s: stq, r: "lead", i: S.pal.lead, m: orig + ls(dg), d: Math.max(1, Math.min(lq * .95, 15.5 - stq)), v: v0 * .85, p: 1 }); anyQ = true;
+          }
+          if (anyQ) { S.lastLead = { m: qOut[qOut.length - 1].m, sec: S.secNo }; return qOut; }
+        }
         var cl = cands.length ? cands : [4];
         if (S.lastLead && S.lastLead.sec === S.secNo) { var lm = S.lastLead.m; cl = cl.slice().sort(function (x, y) { return Math.abs(orig + ls(x) - lm) - Math.abs(orig + ls(y) - lm); }).slice(0, 2); }
         var deg = rng.pick(cl), s = rng.pick([0, 2, 4]);
@@ -1730,6 +1743,35 @@
         if (strum) for (li = 0; li < cs.length; li++) { if (Math.round(cs[li].s * 4) !== ps) { ps = Math.round(cs[li].s * 4); si = 0; } else si++; cs[li].s += si * .07; }
       }
     }
+    /* the director: bands do not play the same four bars for sixteen. At each new phrase (after the first of a section) the arrangement may change one thing
+     * for that phrase: the pad and arp step out, the bass waits two bars, the beat stops for the last beat, the lead is echoed, or a ghost shaker/hat fills in. */
+    var TW_ALLOW = { afrobeats: "thin nobass stop echo ghost", amapiano: "thin nobass stop echo ghost", afrobeat: "thin stop ghost", house: "thin nobass stop echo ghost", trap: "thin nobass stop echo", phonk: "thin nobass stop echo", memphis: "thin nobass stop",
+      lofi: "thin nobass stop echo ghost", pop: "thin nobass stop echo ghost", rnb: "thin nobass stop echo ghost", hiphop: "thin nobass stop ghost", reggae: "thin stop", funk: "thin stop", rock: "thin stop", rocknroll: "thin stop", blues: "thin stop", jazz: "thin", ambient: "thin", cinematic: "thin", acoustic: "thin" };
+    var TW_GHOST = { afrobeats: "shaker", amapiano: "shaker", afrobeat: "shaker", house: "hat", lofi: "hat", pop: "shaker", rnb: "hat", hiphop: "hat" };
+    function direct(ev, sec, lastBar) {
+      if (S.style.solo || spec.drums || SOLO || /^(intro|break|breath|build|bridge)$/.test(sec.kind) || sec.bars < 8) return ev;
+      var pb = S.secBar % 4, ph = Math.floor(S.secBar / 4);
+      if (pb === 0) {
+        S.twist = null;
+        if (ph >= 1 && rng.chance(.6)) {
+          var allow = (TW_ALLOW[S.styleName] || "thin").split(" ").filter(function (t) { return t !== S.lastTwist; });
+          if (allow.length) { S.twist = rng.pick(allow); S.lastTwist = S.twist; }
+        } else S.lastTwist = null;
+      }
+      var tw = S.twist; if (!tw) return ev;
+      if (tw === "thin" && pb < 2) ev = ev.filter(function (e) { return e.r !== "pad" && e.r !== "arp"; });
+      else if (tw === "nobass" && pb < 2) ev = ev.filter(function (e) { return e.r !== "bass"; });
+      else if (tw === "stop" && pb === 3) ev = ev.filter(function (e) { return !(e.s >= 12 && (e.r === "bass" || e.r === "comp" || (e.r === "drums" && e.k === "kick"))); });
+      else if (tw === "echo" && pb === 3) {
+        var cp = [];
+        ev.forEach(function (e) { if (e.r === "lead" && !e.ans && !e.vx && e.m !== undefined && e.s + 3 < 16) cp.push({ s: e.s + 3, r: "lead", i: e.i, m: e.m, d: Math.max(1, e.d * .6), v: e.v * .36, p: 3, pan: .4 }); });
+        ev = ev.concat(cp);
+      } else if (tw === "ghost" && TW_GHOST[S.styleName]) {
+        var gk = TW_GHOST[S.styleName], have = {}; ev.forEach(function (e) { if (e.r === "perc") have[Math.round(e.s)] = 1; });
+        for (var gs = 1; gs < 16; gs += 2) if (!have[gs] && rng.chance(.8)) ev.push({ s: gs, r: "perc", k: gk, v: .2 + rng() * .08, p: 3, pan: (gs % 4 < 2 ? -1 : 1) * .3 });
+      }
+      return ev;
+    }
     function nextBar() {
       var first = false;
       if (S.stage < 0) { enterStage(0, false); }
@@ -1744,7 +1786,11 @@
         S.compV = voice(chord, COMP_CENTER[S.pal.comp] || 62, S.compV, 14, S.style.rootless);
       }
       var lastBar = S.secBar === sec.bars - 1, ev = [];
+      /* the first intro does not just fade in: its last two bars tease the hook on the lead and let the bass walk in, so the listener hears the tune before the verse */
+      var teaser = !PLAN && !S.style.solo && !spec.drums && !SOLO && sec.kind === "intro" && S.secNo === 1 && sec.bars >= 4 && S.secBar >= sec.bars - 2, _tl = sec.lead, _tb = sec.layers.bass;
+      if (teaser) { sec.lead = "theme"; sec.layers.bass = S.style.drums !== 0 && sec.layers.drums > 0 ? true : sec.layers.bass; }
       ev = ev.concat(padBar(sec, chord, chordStart), bassBar(sec, chord, nextChord, cb), compBar(sec, chord, cb), leadBar(sec, chord, ci, cb), answerBar(sec, chord, S.secBar % 4), arpBar(sec), drumBar(sec, S.secBar === 0, lastBar));
+      if (teaser) { sec.lead = _tl; sec.layers.bass = _tb; if (lastBar) ev.push({ s: 8, r: "fx", k: "revcrash", d: 8, v: .35, p: 2 }); }
       if (sec.vox) {
         if (chordStart || !S.voxV) { S.voxV = voice(chord, sec.vox.i === "choir" ? 60 : 64, S.voxV, 10, false); }
         var vt = S.voxV.slice(-3), vi2;
@@ -1766,6 +1812,7 @@
           ev.push({ s: 8, r: "fx", k: "revcrash", d: 8, v: final ? .6 : .45, p: 2 });
         }
       }
+      ev = direct(ev, sec, lastBar);
       var mk = S.mask, fxm = S.fixed, hasMask = !!fxm; for (var mq in mk) if (mk[mq] === false) hasMask = true;
       if (hasMask) ev = ev.filter(function (e) { var kk = e.vx ? "voice" : (e.r === "drums" || e.r === "perc") ? "drums" : e.r; return mk[kk] !== false && !(fxm && fxm[kk] === false && e.r !== "fx"); });
       if (S.secBar === 0 && (sec.kind === "break" || sec.kind === "breath" || sec.kind === "bridge")) ev.push({ s: 0, r: "fx", k: "fall", d: 12, v: .4, p: 2 });

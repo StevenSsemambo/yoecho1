@@ -379,3 +379,9 @@ Audit over 20 genres x 8 moods x 6 seeds (scripts kept outside the repo). Found 
 - Opening the Debates screen now asks the AI for a brand-new topic (random category and angle, and it is told the last topics so it does not repeat; near-duplicates are rejected and retried). The six written topics are only a fallback if the AI cannot be reached.
 - An unfinished debate (started, not conceded) is saved on the device and brought back, with its messages, the next time Debates is opened, even after closing the app. "NEW ›" in the live header abandons it for a new topic. A finished debate is forgotten.
 - NEXT › in the lobby and NEXT TOPIC after a debate ends both generate a fresh topic.
+
+## v37 — Music: variation over time, hook teaser, returning motifs
+- **Director.** From the second phrase of a section on, each four-bar phrase may get one twist (about 60% of the time, never the same twice in a row): the pad and arp step out for two bars, the bass waits two bars, the beat stops for the last beat, the lead is echoed, or a ghost shaker/hat fills in. Which twists are allowed depends on the genre (no bass drop-outs in rock, blues, funk, reggae or jazz).
+- **Hook teaser.** The first intro no longer only fades in: its last two bars play the theme on the lead and let the bass walk in, with a soft reversed cymbal into the verse.
+- **Motifs return.** Verses and bridges now quote the opening of the main theme (plain, a step higher on later phrases, or turned upside down in bridges and breaks) instead of wandering on random chord tones.
+- Plan-based pieces (model-written or built-in) get the director too; the teaser only applies to automatic pieces. Engine `?v=37`, cache `v57`.
