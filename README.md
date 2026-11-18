@@ -395,3 +395,6 @@ New style `celtic` ("Celtic (Enya-style)"): slow modal harmony (aeolian, ionian,
 
 ## v40 – Enya style, second pass
 From production write-ups (MusicRadar, Sound On Sound/muzines): Enya played parts rather than sequencing, used no compression, huge Lexicon reverb, stacked vocals, pizzicato strings (Roland D-50 "Pizzagogo") and live timpani; about half the album is slow rubato, but Orinoco Flow is mid-tempo G Mixolydian I-VII-IV. The celtic style now spans 62-112 bpm, adds I-VII-IV, I-iii-V and I-IV-V progressions, and a plucked-string (pizzicato) lead/arp band.
+
+## v41 – Enya style, third pass
+Celtic now has a loose, breathing tempo (slow drift, easing at phrase ends), tiny human timing shifts on melody/arp/chords, four staggered voice-chord entries (like stacked vocal takes), more frequent call-and-answer, and a bigger reverb send.

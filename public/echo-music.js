@@ -220,7 +220,7 @@
       arp: { rate: 2, kind: "updown", gate: .6 }, duck: 0, delay: .2, tex: { vinyl: 0, rain: 0, air: .3 } },
     /* Celtic / new age in the manner of Enya: slow, modal harmony (i-VI-III-VII, I-vi-IV), a rolling piano or harp arpeggio, warm synth pads, a flute or whistle line, many layered voices
      * singing "aah", a deep drone underneath, almost no drums (a soft timpani on the big beats) and a very large, soft reverb. */
-    celtic: { name: "Celtic (Enya-style)", level: 1.12, lay: .12, wet: .8, bpm: [62, 112], swing: 0, arc: "ethereal", harm: 2, drums: 1, kit: "heavy", feel: "sparse",
+    celtic: { name: "Celtic (Enya-style)", level: 1.12, lay: .12, wet: 1, rubato: true, bpm: [62, 112], swing: 0, arc: "ethereal", harm: 2, drums: 1, kit: "heavy", feel: "sparse",
       drum: { kick: "", snare: "", clap: "", hat: "", open: "", shaker: "", cLo: "", cHi: "", tom: "x.......x......." },
       comp: ["x...............", "x.......x......."], bass: ["r..............."], bassMax: 16,
       progs: [ { m: "aeolian", seq: [[0,"min"],[8,"maj"],[3,"maj"],[10,"maj"]] }, { m: "aeolian", seq: [[0,"min"],[8,"maj"],[10,"maj"],[3,"maj"]] }, { m: "aeolian", seq: [[0,"min"],[10,"maj"],[8,"maj"],[7,"min"]] },
@@ -1733,7 +1733,7 @@
       if (ps && ps.gv) S.sec.gv = ps.gv;
       if (ps) { S.sec.layers.comp = ps.comp; S.sec.layers.arp = ps.arp && !!S.pal.arp; S.sec.layers.bass = ps.bass && e >= .15; S.sec.loop = 0; }
       if (tpl.k === "intro" && S.style.drums === 2 && !S.sec.layers.comp && !ps) S.sec.layers.arp = true;
-      S.sec.layers.ans = !!S.pal.ans && rng.chance(.25 + .55 * e);
+      S.sec.layers.ans = !!S.pal.ans && rng.chance(S.styleName === "celtic" ? .6 + .35 * e : .25 + .55 * e);
       S.secBar = 0; S.secNo++;
       S.secStartBarNo = S.barNo;
     }
@@ -1818,8 +1818,8 @@
       if (teaser) { sec.lead = _tl; sec.layers.bass = _tb; if (lastBar) ev.push({ s: 8, r: "fx", k: "revcrash", d: 8, v: .35, p: 2 }); }
       if (sec.vox) {
         if (chordStart || !S.voxV) { S.voxV = voice(chord, sec.vox.i === "choir" ? 60 : 64, S.voxV, 10, false); }
-        var vt = S.voxV.slice(-3), vi2;
-        if (chordStart) for (vi2 = 0; vi2 < vt.length; vi2++) ev.push({ s: 0, r: "lead", i: sec.vox.i, m: vt[vi2], d: harm * 16 - 1, v: BASE_VEL.pad * sec.dyn * 1.1 * VOX.lvl, p: 1, vx: 1, cost: 1, pan: (vi2 - 1) * .3 });
+        var celt = S.styleName === "celtic", vt = S.voxV.slice(celt ? -4 : -3), vi2;
+        if (chordStart) for (vi2 = 0; vi2 < vt.length; vi2++) ev.push({ s: celt ? vi2 * .6 : 0, r: "lead", i: sec.vox.i, m: vt[vi2], d: harm * 16 - 1 - (celt ? vi2 * .6 : 0), v: BASE_VEL.pad * sec.dyn * 1.1 * VOX.lvl * (celt ? .85 : 1), p: 1, vx: 1, cost: 1, pan: (vi2 - 1) * .3 });
         if (sec.vox.dbl) { var snap = ev.slice(); snap.forEach(function (e) { if (e.r === "lead" && !e.ans && !e.vx && e.i !== "hum" && e.m !== undefined) ev.push({ s: e.s, r: "lead", i: "hum", m: e.m + sec.vox.dbl.o, d: e.d, v: e.v * .55 * VOX.lvl, p: 1, vx: 1, cost: 1, pan: .15 }); }); }
       }
       /* transitions: the bar before a drop leaves a gap and a reversed cymbal pulls into it; a break opens with a falling sweep */
@@ -1843,6 +1843,7 @@
       if (S.secBar === 0 && (sec.kind === "break" || sec.kind === "breath" || sec.kind === "bridge")) ev.push({ s: 0, r: "fx", k: "fall", d: 12, v: .4, p: 2 });
       if (S.style.solo) ev = ev.filter(function (e) { return e.r !== "fx"; });
       humanize(ev);
+      if (S.style.rubato) ev.forEach(function (e) { if ((e.r === "lead" || e.r === "arp" || e.r === "comp") && !e.vx) e.s = Math.max(0, e.s + (rng() - .5) * .3); });
       ev.sort(function (a, b) { return a.s - b.s; });
       /* mix automation: filter opens through intros and builds, closes in breaks */
       var cut = 1, tpl = sec.tpl, prog = S.secBar / sec.bars;
@@ -1854,7 +1855,8 @@
       var human = S.style.solo ? 1 : spec.drums ? .5 : S.styleName === "jazz" ? .75 : S.styleName === "blues" || S.styleName === "rocknroll" ? .65 : S.styleName === "lofi" ? .85 : (S.styleName === "house" || S.styleName === "trap") ? .12 : .45;
       /* rubato: a solo player breathes with the phrase, easing at phrase ends and drifting slightly otherwise */
       var bpmB = S.bpm;
-      if (S.style.solo) { S.rub = clamp(S.rub * .8 + (rng() - .5) * .012, -.03, .03); bpmB = S.bpm * (1 + S.rub - ((S.secBar % 4) === 3 ? .035 : 0) - (lastBar ? .03 : 0)); }
+      if (S.style.rubato) { S.rub = clamp((S.rub || 0) * .85 + (rng() - .5) * .016, -.04, .04); bpmB = S.bpm * (1 + S.rub - ((S.secBar % 4) === 3 ? .045 : 0) - (lastBar ? .05 : 0)); }
+      else if (S.style.solo) { S.rub = clamp(S.rub * .8 + (rng() - .5) * .012, -.03, .03); bpmB = S.bpm * (1 + S.rub - ((S.secBar % 4) === 3 ? .035 : 0) - (lastBar ? .03 : 0)); }
       var bar = {
         idx: S.barNo, bpm: bpmB, stepDur: 60 / bpmB / 4, barDur: 60 / bpmB * 4, swing: S.style.swing, swing8: S.style.swing8 || 0, human: human, events: ev,
         lay: S.style.lay || 0,
