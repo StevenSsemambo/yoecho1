@@ -404,3 +404,8 @@ Celtic progressions can now be written as A/B pairs: verse I-vi-IV, chorus vi-IV
 
 ## v43 – 3/4 waltz time
 The engine can now play bars of three beats (12 sixteenths): the bar is composed as usual, the last beat is cut and long notes are shortened to fit; bar length and scheduling follow. The celtic style plays about 4 in 10 pieces as a waltz at 70-92 bpm (like Caribbean Blue). Other styles are unchanged. Written plans stay in 4/4.
+
+## v44 – Enya style: real key lift, tighter melody, better waltz
+- The final swell of a celtic piece now modulates up a tone or a minor third, then returns home in the closing breath.
+- Lead notes are folded into B3-D5 (A3-D5 at most), so the melody stays low and narrow like the originals.
+- In waltz bars the melody is squeezed onto the three beats instead of losing its last beat.

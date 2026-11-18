@@ -220,7 +220,7 @@
       arp: { rate: 2, kind: "updown", gate: .6 }, duck: 0, delay: .2, tex: { vinyl: 0, rain: 0, air: .3 } },
     /* Celtic / new age in the manner of Enya: slow, modal harmony (i-VI-III-VII, I-vi-IV), a rolling piano or harp arpeggio, warm synth pads, a flute or whistle line, many layered voices
      * singing "aah", a deep drone underneath, almost no drums (a soft timpani on the big beats) and a very large, soft reverb. */
-    celtic: { name: "Celtic (Enya-style)", waltz: .4, leadCap: 68, level: 1.12, lay: .12, wet: 1, rubato: true, bpm: [62, 112], swing: 0, arc: "ethereal", harm: 2, drums: 1, kit: "heavy", feel: "sparse",
+    celtic: { name: "Celtic (Enya-style)", waltz: .4, leadCap: 68, keyLift: true, level: 1.12, lay: .12, wet: 1, rubato: true, bpm: [62, 112], swing: 0, arc: "ethereal", harm: 2, drums: 1, kit: "heavy", feel: "sparse",
       drum: { kick: "", snare: "", clap: "", hat: "", open: "", shaker: "", cLo: "", cHi: "", tom: "x.......x......." },
       comp: ["x...............", "x.......x......."], bass: ["r..............."], bassMax: 16,
       progs: [ { m: "aeolian", seq: [[0,"min"],[8,"maj"],[3,"maj"],[10,"maj"]] }, { m: "aeolian", seq: [[0,"min"],[8,"maj"],[10,"maj"],[3,"maj"]] }, { m: "aeolian", seq: [[0,"min"],[10,"maj"],[8,"maj"],[7,"min"]] },
@@ -1719,6 +1719,10 @@
         if (rng.chance(.55)) S.theme = makeTheme();
         if (S.cycle % 3 === 0 && rng.chance(.5)) { var rel = rng.pick([7, 5, 2, 0]); if (rel) S.root = (S.root + rel) % 12; }
       }
+      if (S.style.keyLift && !PLAN) {
+        if (S.liftOn) { S.root = (S.root + 12 - S.liftOn) % 12; S.liftOn = 0; }
+        if (tpl.lift) { S.liftOn = rng.pick([2, 3]); S.root = (S.root + S.liftOn) % 12; }
+      }
       S.arcIdx++;
       var harm = S.style.harm, prog = ps ? ps.chords : (tpl.k === "chorus" || tpl.k === "drop" || tpl.k === "climax" || tpl.k === "swell" || tpl.k === "rise") ? S.progB : (tpl.k === "bridge" ? bridgeProg() : S.progA), L = prog.length * harm, bars = Math.ceil(tpl.n * 4 / L) * L;
       var e = clamp(.18 + S.recipe.energy * .8 * (.35 + .65 * tpl.e) + S.bias, .1, 1);
@@ -1858,7 +1862,11 @@
       var human = S.style.solo ? 1 : spec.drums ? .5 : S.styleName === "jazz" ? .75 : S.styleName === "blues" || S.styleName === "rocknroll" ? .65 : S.styleName === "lofi" ? .85 : (S.styleName === "house" || S.styleName === "trap") ? .12 : .45;
       /* rubato: a solo player breathes with the phrase, easing at phrase ends and drifting slightly otherwise */
       /* waltz: a 3/4 bar is twelve sixteenths. The bar is written as usual, then the last beat is cut and long notes shortened to fit */
-      if (S.waltz) { ev = ev.filter(function (e) { return e.s < 12; }); ev.forEach(function (e) { if (e.d >= 8 && e.r !== "drums") e.d = Math.max(1, e.d * .75); else if (e.s + e.d > 12.5 && e.r !== "drums") e.d = Math.max(1, 12 - e.s); }); }
+      if (S.waltz) {
+        var seen = {}; ev.forEach(function (e) { if (e.r === "lead" && !e.vx) { e.s = Math.round(e.s * .75); e.d = Math.max(1, e.d * .75); } });
+        ev = ev.filter(function (e) { if (e.r === "lead" && !e.vx) { var k = (e.ans ? "a" : "l") + e.s; if (seen[k]) return false; seen[k] = 1; } return true; });
+        ev = ev.filter(function (e) { return e.s < 12; }); ev.forEach(function (e) { if (e.d >= 8 && e.r !== "drums") e.d = Math.max(1, e.d * .75); else if (e.s + e.d > 12.5 && e.r !== "drums") e.d = Math.max(1, 12 - e.s); }); }
+      if (S.style.leadCap) ev.forEach(function (e) { if (e.r === "lead" && !e.vx && e.m !== undefined) { while (e.m > 74) e.m -= 12; while (e.m < 57) e.m += 12; } });
       var bpmB = S.bpm;
       if (S.style.rubato) { S.rub = clamp((S.rub || 0) * .85 + (rng() - .5) * .016, -.04, .04); bpmB = S.bpm * (1 + S.rub - ((S.secBar % 4) === 3 ? .045 : 0) - (lastBar ? .05 : 0)); }
       else if (S.style.solo) { S.rub = clamp(S.rub * .8 + (rng() - .5) * .012, -.03, .03); bpmB = S.bpm * (1 + S.rub - ((S.secBar % 4) === 3 ? .035 : 0) - (lastBar ? .03 : 0)); }
