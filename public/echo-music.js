@@ -220,11 +220,11 @@
       arp: { rate: 2, kind: "updown", gate: .6 }, duck: 0, delay: .2, tex: { vinyl: 0, rain: 0, air: .3 } },
     /* Celtic / new age in the manner of Enya: slow, modal harmony (i-VI-III-VII, I-vi-IV), a rolling piano or harp arpeggio, warm synth pads, a flute or whistle line, many layered voices
      * singing "aah", a deep drone underneath, almost no drums (a soft timpani on the big beats) and a very large, soft reverb. */
-    celtic: { name: "Celtic (Enya-style)", level: 1.12, lay: .12, wet: 1, rubato: true, bpm: [62, 112], swing: 0, arc: "ethereal", harm: 2, drums: 1, kit: "heavy", feel: "sparse",
+    celtic: { name: "Celtic (Enya-style)", leadCap: 68, level: 1.12, lay: .12, wet: 1, rubato: true, bpm: [62, 112], swing: 0, arc: "ethereal", harm: 2, drums: 1, kit: "heavy", feel: "sparse",
       drum: { kick: "", snare: "", clap: "", hat: "", open: "", shaker: "", cLo: "", cHi: "", tom: "x.......x......." },
       comp: ["x...............", "x.......x......."], bass: ["r..............."], bassMax: 16,
       progs: [ { m: "aeolian", seq: [[0,"min"],[8,"maj"],[3,"maj"],[10,"maj"]] }, { m: "aeolian", seq: [[0,"min"],[8,"maj"],[10,"maj"],[3,"maj"]] }, { m: "aeolian", seq: [[0,"min"],[10,"maj"],[8,"maj"],[7,"min"]] },
-               { m: "ionian", seq: [[0,"maj"],[9,"min"],[5,"maj"],[7,"sus4"]] }, { m: "ionian", seq: [[5,"maj"],[9,"min"],[7,"maj"],[2,"min"]] }, { m: "ionian", seq: [[0,"add9"],[9,"min"],[5,"maj"],[0,"add9"]] },
+               { m: "ionian", seq: [[0,"maj"],[9,"min"],[5,"maj"],[5,"maj"]], b: [[9,"min"],[5,"maj"],[7,"maj"],[0,"maj"]] }, { m: "ionian", seq: [[5,"maj"],[9,"min"],[7,"maj"],[2,"min"]], b: [[5,"maj"],[9,"min"],[7,"maj"],[0,"maj"]] }, { m: "ionian", seq: [[0,"maj"],[9,"min"],[5,"maj"],[7,"sus4"]] }, { m: "ionian", seq: [[5,"maj"],[9,"min"],[7,"maj"],[2,"min"]] }, { m: "ionian", seq: [[0,"add9"],[9,"min"],[5,"maj"],[0,"add9"]] },
                { m: "dorian", seq: [[0,"min"],[5,"maj"],[10,"maj"],[0,"min"]] }, { m: "dorian", seq: [[0,"m7"],[10,"maj"],[5,"maj"],[7,"min"]] },
                { m: "lydian", seq: [[0,"maj"],[2,"maj"],[9,"min"],[7,"maj"]] }, { m: "lydian", seq: [[0,"maj7"],[2,"maj"],[11,"min"],[0,"maj7"]] },
                { m: "mixolydian", seq: [[0,"maj"],[10,"maj"],[5,"maj"],[0,"maj"]] }, { m: "mixolydian", seq: [[0,"maj"],[10,"maj"],[5,"maj"],[5,"maj"]] }, { m: "ionian", seq: [[0,"maj"],[4,"min"],[7,"maj"],[0,"maj"]] }, { m: "ionian", seq: [[0,"maj"],[5,"maj"],[7,"maj"],[0,"maj"]] }, { m: "mixolydian", seq: [[0,"maj"],[7,"min"],[10,"maj"],[5,"maj"]] },
@@ -1170,7 +1170,7 @@
         var fam = sp.filter(function (q) { return q.m === S.mode; });
         if (!fam.length) { S.mode = rng.pick(sp).m; fam = sp.filter(function (q) { return q.m === S.mode; }); }
         var pa = rng.int(fam.length), pb2 = rng.int(fam.length); if (fam.length > 1 && pb2 === pa) pb2 = (pa + 1) % fam.length;
-        S.progPool = fam; S.progA = buildAbs(fam[pa].seq); S.progB = buildAbs(fam[pb2].seq); return;
+        S.progPool = fam; S.progA = buildAbs(fam[pa].seq); S.progB = buildAbs(fam[pa].b || fam[pb2].seq); return;
       }
       var pool = PROGS[S.mode], a = rng.int(pool.length), b = rng.int(pool.length);
       if (pool.length > 1 && b === a) b = (a + 1) % pool.length;
@@ -1224,7 +1224,7 @@
       /* a hook has a shape: rise and fall, a leap that steps back, a repeated note that jumps, a falling line... */
       var HOOKS = [[0, 1, 2, 1, 0, 1], [0, 2, 1, 0, -1, 0], [0, 0, 3, 2, 1, 0], [2, 1, 0, 1, 2, 2], [0, 2, 4, 2, 1, 0], [4, 3, 2, 0, 1, 0], [0, 1, 0, -1, 0, 2], [0, 0, 2, 2, 4, 3], [3, 2, 3, 1, 2, 0]];
       var shape = rng.pick(HOOKS), d0 = r0.map(function (x, j) { return start + (j < shape.length ? shape[j] : shape[shape.length - 1] - (j - shape.length + 1) * (rng.chance(.6) ? 1 : 0)); });
-      d0 = d0.map(function (x) { return clamp(x, -2, 10); });
+      d0 = d0.map(function (x) { return S.style.leadCap ? clamp(x, -1, 6) : clamp(x, -2, 10); });
       var m0 = { on: r0, deg: d0 };
       var d1 = d0.slice(), L = d1.length;
       d1[L - 1] += rng.pick([-2, -1, 1, 2]); if (L > 2) d1[L - 2] += rng.pick([-1, 1]);
@@ -1248,7 +1248,8 @@
       pairs.forEach(function (p) { if (o.on.length && o.on[o.on.length - 1] === p.s) return; o.on.push(p.s); o.deg.push(p.d); });
       return o;
     }
-    function leadOrigin() { var c = LEAD_CENTER[S.pal.lead] || 70; return placeInRange(S.root, c - 13, c - 2); }
+    function leadC(n) { var c = LEAD_CENTER[n] || 70; return S.style && S.style.leadCap ? Math.min(c, S.style.leadCap) : c; }
+    function leadOrigin() { var c = leadC(S.pal.lead); return placeInRange(S.root, c - 13, c - 2); }
     function chordRs(c) { return c.rs !== undefined ? c.rs : degSemi(S.mode, c.d); }
     function chordThird(c) { return c.abs ? c.abs[1] : (degSemi(S.mode, c.degs[1]) - degSemi(S.mode, c.degs[0])); }
     function chordPcs(chord) { return chord.abs ? chord.abs.map(function (x) { return (S.root + chord.rs + x) % 12; }) : chord.degs.map(function (d) { return (S.root + degSemi(S.mode, d)) % 12; }); }
@@ -1389,10 +1390,10 @@
       if (mode === "call" && (pb % 2) === 1) return out;
       var key = (mode === "varied" ? "v" : sec.kind) + pb + (mode === "call" ? "c" : ""), ln = mode === "varied" ? null : S.lines[key];
       if (!ln) { ln = kind === "blues" ? makeLick(pb, mode === "varied" ? 1 : sec.e) : makeLine(pb, mode === "varied" ? 1 : sec.e); if (mode !== "varied") S.lines[key] = ln; }
-      var c = LEAD_CENTER[S.pal.lead] || 70, v0 = BASE_VEL.lead * sec.dyn, art = ARTIC[fam(S.pal.lead)] || .9, n = ln.on.length, k, base, sc;
+      var c = leadC(S.pal.lead), v0 = BASE_VEL.lead * sec.dyn, art = ARTIC[fam(S.pal.lead)] || .9, n = ln.on.length, k, base, sc;
       if (kind === "blues") { sc = lscale(); base = placeInRange(S.root, c - 12, c - 1); }
       else { sc = (chord.q && QSCALE[chord.q]) || MODES.ionian; base = placeInRange((S.root + chordRs(chord)) % 12, c - 12, c - 1); }
-      var lift = (sec.lift && (sec.loop % 2) === 1) ? 12 : 0;
+      var lift = (sec.lift && (sec.loop % 2) === 1 && !S.style.leadCap) ? 12 : 0;
       for (k = 0; k < n; k++) {
         var st = ln.on[k], ix = ln.ix[k], len = (k < n - 1 ? ln.on[k + 1] : Math.min(16, st + 6)) - st, o = Math.floor(ix / sc.length), m = base + sc[ix - o * sc.length] + 12 * o + lift;
         var ev = { s: st, r: "lead", i: S.pal.lead, m: m, d: Math.max(1, Math.min(len, 8) * art * (k === n - 1 ? 1.1 : .96)), v: v0 * (st % 4 === 0 ? 1 : .84) * (1 + (rng() - .5) * .12), p: 1 };

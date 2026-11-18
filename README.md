@@ -398,3 +398,6 @@ From production write-ups (MusicRadar, Sound On Sound/muzines): Enya played part
 
 ## v41 – Enya style, third pass
 Celtic now has a loose, breathing tempo (slow drift, easing at phrase ends), tiny human timing shifts on melody/arp/chords, four staggered voice-chord entries (like stacked vocal takes), more frequent call-and-answer, and a bigger reverb send.
+
+## v42 – Enya style, from Only Time / Caribbean Blue
+Celtic progressions can now be written as A/B pairs: verse I-vi-IV, chorus vi-IV-V-I (the relative-minor lift heard in Only Time), and IV-vi-V-ii (Caribbean Blue). The melody is capped lower and kept narrower (about an octave, mostly stepwise), as in the originals (B3-C5). 3/4 time is not yet supported.
