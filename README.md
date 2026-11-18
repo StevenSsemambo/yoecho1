@@ -389,3 +389,6 @@ Audit over 20 genres x 8 moods x 6 seeds (scripts kept outside the repo). Found 
 ## v38 — "What's off?" sheet no longer hidden by the bottom bar
 - The sheet opened inside the chat or music card, so it grew down underneath the bottom navigation bar and could not be scrolled into view. It is now a bottom sheet drawn over the whole screen (above the bar), scrolls by itself on short phones, and closes when you tap outside it.
 - The option buttons (Drums, Bass, Melody, …) were drawn white by mistake; they now match the app.
+
+## v39 – Celtic / Enya-style genre
+New style `celtic` ("Celtic (Enya-style)"): slow modal harmony (aeolian, ionian, dorian, lydian), rolling harp/piano arpeggio, choir/pad bed, flute/whistle/violin/vox lead with ooh layering, deep sub drone, only soft timpani, big reverb. New `ethereal` arc. Ask: "play Enya-style music", "play celtic". Original music in the style, not copies of any song.
