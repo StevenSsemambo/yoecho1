@@ -413,3 +413,6 @@ The engine can now play bars of three beats (12 sixteenths): the bar is composed
 ## v45 – Opera / classical choral style
 New style `opera` ("Opera (Classical choral)"): an aria with orchestra. Strings or choir pad, harp/piano/organ accompaniment, a soprano-like voice, violin or flute singing the tune, upright bass, soft timpani, four staggered choir voices, 3/4 waltz bars in about 4 in 10 pieces, a gentle rubato and a key lift in the climax. Progressions come from classical practice (i-iv-V-i, i-bII-V-i, i-iiø7-V7-i, I-IV-V-I, I-vi-ii-V, the Pachelbel-style 8-chord ground) with a relative-key lift in the chorus. New `aria` arc: intro, aria verse, chorus, answering bridge, climax with key lift, close. Say "play opera", "play an aria", "play classical choral".
 Research: Hooktheory (Mozart's Lacrimosa: D minor, 6/8; Handel's Hallelujah: D major I-IV-I), Opera 101 on aria forms. Voices are synthesized vowels, not real singers.
+
+## v46 – more variety in opera and celtic
+Each now has two song shapes (aria / aria2, ethereal / ethereal2) chosen at random, more instrument bands, and opera's tempo range widened to 52-96 bpm, so consecutive pieces differ in structure, line-up and pace and not just in notes.

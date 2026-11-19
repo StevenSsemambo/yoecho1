@@ -231,11 +231,12 @@
                { m: "phrygian", seq: [[0,"min"],[1,"maj"],[8,"maj"],[10,"min"]] } ],
       pal: { pad: ["choir", "pad", "strings"], comp: ["piano", "harp", "strings"], lead: ["flute", "vox", "whistle", "violin", "ooh", "pluck"], arp: ["harp", "piano", "bells", "kalimba", "pluck"], bass: ["sub"] },
       bands: [ { pad: "choir", comp: "piano", lead: "flute", arp: "harp", bass: "sub", ans: "ooh" }, { pad: "pad", comp: "strings", lead: "vox", arp: "piano", bass: "sub", ans: "flute" },
-               { pad: "strings", comp: "harp", lead: "whistle", arp: "bells", bass: "sub", ans: "ooh" }, { pad: "choir", comp: "piano", lead: "violin", arp: "harp", bass: "sub", ans: "flute" }, { pad: "strings", comp: "piano", lead: "pluck", arp: "harp", bass: "sub", ans: "ooh" }, { pad: "choir", comp: "strings", lead: "pluck", arp: "pluck", bass: "sub", ans: "ooh" } ],
+               { pad: "strings", comp: "harp", lead: "whistle", arp: "bells", bass: "sub", ans: "ooh" }, { pad: "choir", comp: "piano", lead: "violin", arp: "harp", bass: "sub", ans: "flute" }, { pad: "strings", comp: "piano", lead: "pluck", arp: "harp", bass: "sub", ans: "ooh" }, { pad: "choir", comp: "strings", lead: "pluck", arp: "pluck", bass: "sub", ans: "ooh" },
+               { pad: "strings", comp: "piano", lead: "flute", arp: "pluck", bass: "sub", ans: "ooh" }, { pad: "choir", comp: "harp", lead: "whistle", arp: "piano", bass: "sub", ans: "violin" } ],
       arp: { rate: 2, kind: "updown", gate: .75 }, duck: 0, delay: .3, tex: { vinyl: 0, rain: 0, air: .25 } },
     /* Opera / classical choral: an aria or chorus with orchestra. Slow to moderate, often three in a bar, a soprano-like voice or violin singing the tune over strings, harp and organ,
      * a choir swelling on the big moments, an upright bass, soft timpani, a grand reverb, and a lift of key for the finale. */
-    opera: { name: "Opera (Classical choral)", level: 1.14, lay: .15, wet: .9, rubato: true, waltz: .4, keyLift: true, bpm: [56, 88], swing: 0, arc: "aria", harm: 1, drums: 1, kit: "heavy", feel: "sparse",
+    opera: { name: "Opera (Classical choral)", level: 1.14, lay: .15, wet: .9, rubato: true, waltz: .4, keyLift: true, bpm: [52, 96], swing: 0, arc: "aria", harm: 1, drums: 1, kit: "heavy", feel: "sparse",
       drum: { kick: "", snare: "", clap: "", hat: "", open: "", shaker: "", cLo: "", cHi: "", tom: "x.......x......." },
       comp: ["x.......x.......", "x...x...x......."], bass: ["r.......r......."], bassMax: 16,
       progs: [ { m: "aeolian", seq: [[0,"min"],[5,"min"],[7,"maj"],[0,"min"]], b: [[8,"maj"],[3,"maj"],[5,"min"],[7,"maj"]] }, { m: "aeolian", seq: [[0,"min"],[1,"maj"],[7,"maj"],[0,"min"]] },
@@ -245,7 +246,8 @@
       pal: { pad: ["strings", "choir"], comp: ["harp", "piano", "organ"], lead: ["vox", "flute", "violin"], arp: ["harp", "piano"], bass: ["upbass"] },
       bands: [ { pad: "strings", comp: "harp", lead: "vox", arp: "piano", bass: "upbass", ans: "violin" }, { pad: "choir", comp: "harp", lead: "violin", arp: "piano", bass: "upbass", ans: "flute" },
                { pad: "strings", comp: "organ", lead: "vox", arp: "harp", bass: "upbass", ans: "flute" }, { pad: "choir", comp: "piano", lead: "vox", arp: "harp", bass: "upbass", ans: "strings" },
-               { pad: "strings", comp: "harp", lead: "flute", arp: "piano", bass: "upbass", ans: "horns" } ],
+               { pad: "strings", comp: "harp", lead: "flute", arp: "piano", bass: "upbass", ans: "horns" },
+               { pad: "organ", comp: "harp", lead: "vox", arp: "piano", bass: "upbass", ans: "choir" }, { pad: "strings", comp: "piano", lead: "violin", arp: "harp", bass: "upbass", ans: "horns" }, { pad: "choir", comp: "organ", lead: "flute", arp: "harp", bass: "upbass", ans: "violin" } ],
       arp: { rate: 2, kind: "updown", gate: .85 }, duck: 0, delay: .12, tex: { vinyl: 0, rain: 0, air: .12 } },
     acoustic: { name: "Acoustic", level: 1.0, lay: .5, bpm: [80, 100], swing: .15, arc: "wave", harm: 1, drums: 1, kit: "lofi", feel: "medium", pick: true,
       drum: { kick: "x.......x.......", snare: "", clap: "", hat: "", open: "", shaker: "x.x.x.x.x.x.x.x.", cLo: "", cHi: "", rim: "....x.......x..." },
@@ -404,6 +406,24 @@
       { k: "bridge", n: 2, e: .42, lead: "call", arp: .6, drums: 0, bass: true },
       { k: "climax", n: 2, e: .97, lead: "varied", arp: 1, drums: 1, bass: true, lift: true, crash: true },
       { k: "outro", n: 1, e: .24, lead: "sparse", arp: .5, drums: 0, bass: false, cut: .5 }
+    ],
+    aria2: [
+      { k: "intro", n: 1, e: .26, lead: "none", arp: .7, drums: 0, bass: false, cut: .5 },
+      { k: "verse", n: 2, e: .46, lead: "theme", arp: .6, drums: 0, bass: true },
+      { k: "bridge", n: 2, e: .36, lead: "call", arp: .5, drums: 0, bass: false },
+      { k: "verse", n: 1, e: .6, lead: "varied", arp: .8, drums: 0, bass: true },
+      { k: "chorus", n: 2, e: .82, lead: "theme", arp: .9, drums: 1, bass: true },
+      { k: "climax", n: 3, e: .98, lead: "varied", arp: 1, drums: 1, bass: true, lift: true, crash: true },
+      { k: "outro", n: 1, e: .22, lead: "sparse", arp: .5, drums: 0, bass: false, cut: .5 }
+    ],
+    ethereal2: [
+      { k: "intro", n: 2, e: .26, lead: "none", arp: .9, drums: 0, bass: false, cut: .45 },
+      { k: "verse", n: 2, e: .42, lead: "sparse", arp: .8, drums: 0, bass: true },
+      { k: "drift", n: 2, e: .36, lead: "call", arp: .7, drums: 0, bass: true },
+      { k: "swell", n: 2, e: .8, lead: "theme", arp: .9, drums: 1, bass: true },
+      { k: "drift", n: 1, e: .4, lead: "varied", arp: .7, drums: 0, bass: true },
+      { k: "swell", n: 2, e: .95, lead: "varied", arp: 1, drums: 1, bass: true, lift: true },
+      { k: "breath", n: 1, e: .22, lead: "sparse", arp: .5, drums: 0, bass: false, cut: .45 }
     ],
     ethereal: [
       { k: "intro", n: 1, e: .3, lead: "none", arp: .85, drums: 0, bass: false, cut: .5 },
@@ -1165,8 +1185,8 @@
 
     function chooseArc(style, recipe) {
       if (spec.drums) return "drums";
-      if (style.arc === "ethereal") return "ethereal";
-      if (style.arc === "aria") return "aria";
+      if (style.arc === "ethereal") return rng.chance(.5) ? "ethereal" : "ethereal2";
+      if (style.arc === "aria") return rng.chance(.5) ? "aria" : "aria2";
       if (style.arc === "solo") return "solo";
       if (style.arc === "song" || style.arc === "jazz") return style.arc;
       if (style.arc === "groove") return "groove";
