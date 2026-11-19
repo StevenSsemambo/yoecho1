@@ -425,3 +425,7 @@ Each now has two song shapes (aria / aria2, ethereal / ethereal2) chosen at rand
 
 ## v48 – Country
 New style `country`: boom-chick with a train-beat backbeat, walking upright bass, strummed acoustic guitar, fiddle (violin), harmonica, clean electric guitar and piano, 78-120 bpm, a country waltz (3/4) now and then; chords I-IV-V, I-V-vi-IV, I-bVII-IV and a minor ballad. Three new synthesized instruments, **banjo** (bright pluck with a head thump), **mandolin** (paired strings with tremolo on long notes) and **pedal steel** (sliding, singing sustain with late vibrato). No free-licence recordings of these exist in the sources we can reach (VCSL, danigb/samples, tonejs have none), so they are synthesized, not sampled. YoEcho's catalog now lists country; say "play country" or "play bluegrass".
+
+## v49 – Bluegrass, and softer pedal steel / mandolin
+- New style `bluegrass`: 118-168 bpm, no drums, banjo rolls, mandolin chop, fiddle, harmonica, upright bass and guitar. "play bluegrass" now plays it (before, bluegrass was only listed as a closest match to country).
+- Pedal steel: chords now swell in gently with only slight vibrato; the slide up into the note happens on melody notes only (a slide on every chord could sound seasick). Mandolin: fewer, softer, slightly irregular tremolo picks.
