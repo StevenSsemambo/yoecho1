@@ -416,3 +416,9 @@ Research: Hooktheory (Mozart's Lacrimosa: D minor, 6/8; Handel's Hallelujah: D m
 
 ## v46 – more variety in opera and celtic
 Each now has two song shapes (aria / aria2, ethereal / ethereal2) chosen at random, more instrument bands, and opera's tempo range widened to 52-96 bpm, so consecutive pieces differ in structure, line-up and pace and not just in notes.
+
+## v47 – YoEcho knows its own music
+- A music catalog (`MUSIC_CATALOG`) in index.html describes all 22 styles: what they feel like, best situations and moods; tempo and instruments are read live from the engine, so it cannot drift. It is part of the chat prompt.
+- New rules: choose a fitting style and say why; ask one short question with options when the request is vague; say honestly when a style is not built in (country, gospel, K-pop, EDM, Latin, soul, folk…) and offer the closest options; explain the kinds of music to people who do not know them; and, rarely and gently, offer music that fits how they feel (music still only starts when they ask or say yes).
+- The app no longer starts random music when someone asks for a style it does not have, or when YoEcho is asking a clarifying question.
+- `t_aware.js` (scratchpad test) checks the catalog covers every style in the engine and the UI.
