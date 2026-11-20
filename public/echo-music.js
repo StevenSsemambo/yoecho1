@@ -161,7 +161,7 @@
   var ARTIC = { vocal: .95, dist: .8, lead: .93, keys: .85, pluck: .5, mallet: .5, sus: .96, wind: .92, synth: .8, reed: .93, bowed: .97 };
 
   /* styles: the rhythmic skeleton + instrument palette. Patterns are 16 steps (one bar of 16th notes). */
-  var STYLE_LIST = ["afrobeats", "afrobeat", "amapiano", "lofi", "house", "trap", "phonk", "memphis", "rnb", "ambient", "cinematic", "celtic", "opera", "acoustic", "rocknroll", "rock", "blues", "country", "bluegrass", "irish", "jazz", "reggae", "funk", "pop", "hiphop"];
+  var STYLE_LIST = ["afrobeats", "afrobeat", "lingala", "amapiano", "lofi", "house", "trap", "phonk", "memphis", "rnb", "ambient", "cinematic", "celtic", "opera", "acoustic", "rocknroll", "rock", "blues", "country", "bluegrass", "irish", "jazz", "reggae", "funk", "pop", "hiphop"];
   var STYLES = {
     afrobeats: { name: "Afrobeats", level: 1.08, lay: .35, bpm: [96, 108], swing: .22, arc: "groove", harm: 1, drums: 2, kit: "afrob", feel: "synco",
       drum: { kick: "x..x..x...x...x.", snare: "", clap: "....x.......x...", hat: "x.xxx.x.x.xxx.x.", open: ".......x.......x", shaker: "xoxoxoxoxoxoxoxo", cLo: "..x...x...x..x..", cHi: "...x.x....x.x...", rim: "..x..x..x..x..x.", rimV: .3 },
@@ -173,6 +173,16 @@
       comp: ["x.x..x.x..x.x...", "..x.x..x.x..x.x.", "x..x.x..x..x.x.."], bass: ["r..r.r5.r..r.5a.", "r.r...5.r.r..5o.", "r..r..r.5..r.5.."], bassMax: 5,
       pal: { pad: ["organ", "strings"], comp: ["eguitar", "keys", "hammond"], lead: ["sax", "brass", "eguitar", "balafon", "keys"], arp: ["eguitar", "balafon", "keys"], bass: ["ebass", "upbass"] },
       arp: { rate: 2, kind: "updown", gate: .6 }, duck: .08, delay: .2, tex: { vinyl: .08, rain: 0, air: 0 } },
+    /* Lingala (Congolese rumba and soukous): bright interlocking clean guitars (a high lead over a rolling arpeggio and offbeat chops), a melodic electric bass walking root-fifth, horns answering, congas and a driving kit with a busy snare; a slow rumba verse and chorus, then the sebene, the long instrumental dance section where the guitars take over; a piece is either a rumba (about 100-118) or a soukous (about 136-156) */
+    lingala: { name: "Lingala (Congolese rumba / soukous)", level: 1.06, lay: .3, bpm: [100, 156], bpmKinds: [[98, 118], [136, 156]], swing: .1, arc: "sebene", harm: 1, drums: 2, kit: "afrob", feel: "synco", keyLift: true,
+      drum: { kick: "x..x..x...x.....", snare: "....x.......x...", clap: "", hat: "x.x.x.x.x.x.x.x.", open: "", shaker: "xoxoxoxoxoxoxoxo", cLo: "..x.x...x.x...x.", cHi: "...x...x..x.x...", rim: "..x..x..x..x..x.", rimV: .25 },
+      comp: ["..x...x...x...x.", "x..x..x...x..x..", "..x.x...x..x.x.."], compGen: ["pat"], bass: ["r..r..5...r.5...", "r...r.5.r...5.a.", "r.5...r.r.5...5."], bassMax: 4,
+      pal: { pad: ["organ", "strings"], comp: ["eguitar", "guitar"], lead: ["eguitar", "guitar", "sax"], arp: ["guitar", "eguitar"], bass: ["ebass"] },
+      bands: [ { pad: "organ", comp: "guitar", lead: "eguitar", arp: "eguitar", bass: "ebass", ans: "sax" }, { pad: null, comp: "guitar", lead: "eguitar", arp: "eguitar", bass: "ebass", ans: "horns" },
+               { pad: "strings", comp: "eguitar", lead: "sax", arp: "guitar", bass: "ebass", ans: "eguitar" }, { pad: null, comp: "eguitar", lead: "guitar", arp: "eguitar", bass: "ebass", ans: "horns" } ],
+      progs: [ { m: "ionian", seq: [[0,"maj"],[5,"maj"],[7,"7"],[0,"maj"]] }, { m: "ionian", seq: [[0,"maj"],[7,"7"],[0,"maj"],[7,"7"]] }, { m: "ionian", seq: [[0,"maj"],[5,"maj"],[0,"maj"],[7,"7"]] },
+               { m: "ionian", seq: [[0,"maj"],[2,"7"],[5,"maj"],[7,"7"]] }, { m: "ionian", seq: [[0,"maj"],[9,"min"],[5,"maj"],[7,"7"]] }, { m: "aeolian", seq: [[0,"min"],[5,"min"],[7,"7"],[0,"min"]] } ],
+      arp: { rate: 2, kind: "updown", gate: .55 }, duck: .08, delay: .2, tex: { vinyl: 0, rain: 0, air: 0 } },
     amapiano: { name: "Amapiano", level: 1.06, lay: .3, bpm: [110, 115], swing: .2, arc: "groove", harm: 2, drums: 2, kit: "ama", feel: "synco",
       drum: { kick: "x...x...x...x...", snare: "", clap: "....x.......x...", hat: "x.x.x.x.x.x.x.x.", open: "..x...x...x...x.", shaker: "xoxoxoxoxoxoxoxo", cLo: "..x...x...x..x..", cHi: "...x..x.....x...", rim: "...x..x...x..x..", rimV: .3 },
       comp: ["x..x..x...x..x.x", "..x..x..x..x.x..", "x.....x..x.x...."], bass: ["r..r..r...r..5..", "r.....5.r..r.o..", "r..r.....r..a.5."], bassMax: 3,
@@ -410,6 +420,7 @@
     rnb: [{ kick: "x.....x..x.x....", hat: "x.x.xxx.x.x.xxx." }, { kick: "x...x...x..x....", clap: "........x......x" }],
     acoustic: [{ kick: "x.....x.x.......", rim: "....x.......x..x" }, { kick: "x.......x.x.....", shaker: "xxx.xxx.xxx.xxx." }],
     country: [{ kick: "x.......x.......", snare: "....x.......x..x", tamb: "x.x.x.x.x.x.x.x." }, { kick: "x...x...x...x...", snare: "..x...x...x...x." }, { kick: "x.......x..x....", hat: "x.x.x.x.x.x.xxx." }],
+    lingala: [{ kick: "x..x..x...x.....", snare: "....x..x....x...", hat: "x.x.x.x.x.x.x.x." }, { kick: "x..x..x...x..x..", snare: "..x.x...x.x.x..." }, { kick: "x..x....x..x....", snare: "....x.......x.xx" }],
     rocknroll: [{ kick: "x.....x.x.......", tamb: "x.x.x.x.x.x.x.x." }, { kick: "x..x....x.x.....", snare: "....x.......x..x" }, { kick: "x.......x..x....", hat: "x.xxx.xxx.xxx.xx" }],
     rock: [{ kick: "x..x..x.x.......", hat: "x.x.x.x.x.x.x.x." }, { kick: "x.x.....x.x.....", hat: "xxxxxxxxxxxxxxxx" }, { kick: "x.......x..x.x..", open: "..x...x...x...x." }, { kick: "x...x...x...x...", snare: "....x.......x..x" }],
     blues: [{ kick: "x.....x.x.......", hat: "x.x.x.x.x.x.x.x." }, { kick: "x.......x..x....", snare: "....x.......x..x" }],
@@ -453,6 +464,16 @@
       { k: "chorus", n: 2, e: .86, lead: "varied", arp: .9, drums: 1, bass: true },
       { k: "solo", n: 2, e: .95, lead: "varied", arp: 1, drums: 1, bass: true, lift: true },
       { k: "outro", n: 1, e: .3, lead: "sparse", arp: .5, drums: 0, bass: false, cut: .5 }
+    ],
+    sebene: [
+      { k: "intro", n: 1, e: .4, lead: "sparse", arp: .8, drums: 1, bass: false, cut: .6 },
+      { k: "verse", n: 2, e: .6, lead: "theme", arp: .5, drums: 2, bass: true },
+      { k: "chorus", n: 2, e: .8, lead: "theme", arp: .7, drums: 2, bass: true, fill: true },
+      { k: "solo", n: 4, e: .95, lead: "varied", arp: 1, drums: 2, bass: true, fill: true },
+      { k: "verse", n: 1, e: .65, lead: "call", arp: .6, drums: 2, bass: true },
+      { k: "chorus", n: 1, e: .85, lead: "theme", arp: .8, drums: 2, bass: true },
+      { k: "solo", n: 4, e: 1, lead: "varied", arp: 1, drums: 2, bass: true, fill: true, crash: true, lift: true },
+      { k: "outro", n: 1, e: .4, lead: "sparse", arp: .6, drums: 1, bass: false, cut: .55 }
     ],
     aria2: [
       { k: "intro", n: 1, e: .26, lead: "none", arp: .7, drums: 0, bass: false, cut: .5 },
@@ -1043,7 +1064,7 @@
     var intent = String(b.intent || "").toLowerCase();
     o.intent = (intent === "match" || intent === "lift" || intent === "calm") ? intent : "";
     var st = String(b.style || "").toLowerCase().replace(/[^a-z]/g, "");
-    var salias = { lofi: "lofi", lofibeats: "lofi", chill: "lofi", afrobeat: "afrobeat", fela: "afrobeat", felakuti: "afrobeat", highlife: "afrobeat", afro: "afrobeats", piano: "ambient", enya: "celtic", opera: "opera", aria: "opera", operatic: "opera", classical: "opera", choral: "opera", requiem: "opera", soprano: "opera", tenor: "opera", orchestral: "opera", pavarotti: "opera", mozart: "opera", puccini: "opera", handel: "opera", theater: "opera", theatre: "opera", celtic: "celtic", celt: "celtic", irish: "irish", irishfolk: "irish", irishmusic: "irish", jig: "irish", jigs: "irish", reel: "irish", reels: "irish", ceilidh: "irish", trad: "irish", pub: "irish", hornpipe: "irish", newage: "celtic", ethereal: "celtic", orinoco: "celtic", hiphop: "hiphop", rb: "rnb", rnb: "rnb", soul: "rnb", orchestral: "cinematic", film: "cinematic", guitar: "acoustic", folk: "acoustic", edm: "house", dance: "house", electronic: "house",
+    var salias = { lofi: "lofi", lofibeats: "lofi", chill: "lofi", afrobeat: "afrobeat", fela: "afrobeat", felakuti: "afrobeat", highlife: "afrobeat", afro: "afrobeats", piano: "ambient", enya: "celtic", opera: "opera", aria: "opera", operatic: "opera", classical: "opera", choral: "opera", requiem: "opera", soprano: "opera", tenor: "opera", orchestral: "opera", pavarotti: "opera", mozart: "opera", puccini: "opera", handel: "opera", theater: "opera", theatre: "opera", celtic: "celtic", celt: "celtic", lingala: "lingala", soukous: "lingala", ndombolo: "lingala", sebene: "lingala", congolese: "lingala", congo: "lingala", rumba: "lingala", rhumba: "lingala", congolesrumba: "lingala", irish: "irish", irishfolk: "irish", irishmusic: "irish", jig: "irish", jigs: "irish", reel: "irish", reels: "irish", ceilidh: "irish", trad: "irish", pub: "irish", hornpipe: "irish", newage: "celtic", ethereal: "celtic", orinoco: "celtic", hiphop: "hiphop", rb: "rnb", rnb: "rnb", soul: "rnb", orchestral: "cinematic", film: "cinematic", guitar: "acoustic", folk: "acoustic", edm: "house", dance: "house", electronic: "house",
       rocknroll: "rocknroll", rockandroll: "rocknroll", bluegrassmusic: "bluegrass", country: "country", countrymusic: "country", countrywestern: "country", western: "country", nashville: "country", bluegrass: "bluegrass", newgrass: "bluegrass", banjo: "bluegrass", bluegrassband: "bluegrass", honkytonk: "country", cowboy: "country", hillbilly: "country", rocknrol: "rocknroll", rockn: "rocknroll", rockabilly: "rocknroll", elvis: "rocknroll", chuckberry: "rocknroll", fifties: "rocknroll", oldies: "rocknroll", twist: "rocknroll",
       rock: "rock", hardrock: "rock", classicrock: "rock", altrock: "rock", punk: "rock", grunge: "rock", metal: "rock", indie: "rock", band: "rock", blues: "blues", bluesy: "blues", jazz: "jazz", jazzy: "jazz", swing: "jazz", bebop: "jazz", bossa: "jazz", smoothjazz: "jazz",
       reggae: "reggae", ska: "reggae", dub: "reggae", dancehall: "reggae", funk: "funk", funky: "funk", disco: "funk", groove: "funk", pop: "pop", popmusic: "pop", hiphop2: "hiphop", boombap: "hiphop", rap: "hiphop" };
@@ -1102,6 +1123,7 @@
     rock: "dguitar lguitar eguitar guitar hammond organ strings piano ebass harmonica vox ooh sax keys",
     bluegrass: "guitar banjo mandolin violin harmonica upbass hammond",
     irish: "guitar banjo mandolin violin whistle flute harp piano organ strings upbass pluck bells harmonica",
+    lingala: "eguitar guitar sax brass horns organ hammond strings pad keys ebass upbass mbira kalimba balafon marimba harmonica ooh hum vox choir bells",
     country: "guitar eguitar lguitar banjo mandolin steel violin harmonica piano hammond organ upbass ebass strings pad keys pluck horns",
     rocknroll: "eguitar lguitar guitar piano hammond organ sax horns harmonica upbass ebass vox",
     blues: "hammond organ eguitar lguitar guitar piano harmonica sax brass horns upbass ebass keys vox",
@@ -1238,6 +1260,7 @@
     function chooseArc(style, recipe) {
       if (spec.drums) return "drums";
       if (style.arc === "reel") return "reel";
+      if (style.arc === "sebene") return "sebene";
       if (style.arc === "ethereal") return rng.chance(.5) ? "ethereal" : "ethereal2";
       if (style.arc === "aria") return rng.chance(.5) ? "aria" : "aria2";
       if (style.arc === "solo") return "solo";
@@ -1287,6 +1310,7 @@
       S.jig = !!(S.style.jig && !PLAN && rng.chance(S.style.jig));
       S.waltz = S.jig || !!(S.style.waltz && !PLAN && rng.chance(S.style.waltz));
       S.bpmTarget = spec.bpmForce || computeBpm(S.style, st.recipe);
+      if (S.style.bpmKinds && !PLAN && !spec.bpmForce) { var bk = rng.pick(S.style.bpmKinds); S.bpmTarget = rng.range(bk[0], bk[1]); }
       if (S.jig) { if (!spec.bpmForce) S.bpmTarget = rng.range(148, 170); } else if (S.waltz) S.bpmTarget = clamp(S.bpmTarget, 70, 92);
       if (S.barNo === 0) S.bpm = S.bpmTarget;
       S.arcName = chooseArc(S.style, st.recipe);
@@ -1876,7 +1900,7 @@
     /* the director: bands do not play the same four bars for sixteen. At each new phrase (after the first of a section) the arrangement may change one thing
      * for that phrase: the pad and arp step out, the bass waits two bars, the beat stops for the last beat, the lead is echoed, or a ghost shaker/hat fills in. */
     var TW_ALLOW = { afrobeats: "thin nobass stop echo ghost", amapiano: "thin nobass stop echo ghost", afrobeat: "thin stop ghost", house: "thin nobass stop echo ghost", trap: "thin nobass stop echo", phonk: "thin nobass stop echo", memphis: "thin nobass stop",
-      lofi: "thin nobass stop echo ghost", pop: "thin nobass stop echo ghost", rnb: "thin nobass stop echo ghost", hiphop: "thin nobass stop ghost", reggae: "thin stop", funk: "thin stop", rock: "thin stop", rocknroll: "thin stop", blues: "thin stop", country: "thin stop", bluegrass: "thin stop", irish: "thin stop", jazz: "thin", ambient: "thin", celtic: "thin echo", opera: "thin echo", cinematic: "thin", acoustic: "thin" };
+      lofi: "thin nobass stop echo ghost", pop: "thin nobass stop echo ghost", rnb: "thin nobass stop echo ghost", hiphop: "thin nobass stop ghost", reggae: "thin stop", funk: "thin stop", rock: "thin stop", rocknroll: "thin stop", blues: "thin stop", country: "thin stop", bluegrass: "thin stop", irish: "thin stop", lingala: "thin nobass stop echo ghost", jazz: "thin", ambient: "thin", celtic: "thin echo", opera: "thin echo", cinematic: "thin", acoustic: "thin" };
     var TW_GHOST = { afrobeats: "shaker", amapiano: "shaker", afrobeat: "shaker", house: "hat", lofi: "hat", pop: "shaker", rnb: "hat", hiphop: "hat" };
     function direct(ev, sec, lastBar) {
       if (S.style.solo || spec.drums || SOLO || /^(intro|break|breath|build|bridge)$/.test(sec.kind) || sec.bars < 8) return ev;
@@ -3535,6 +3559,18 @@
       Sx("verse", 8, .7, "Dm C Dm C", { drums: 1 }),
       Sx("outro", 4, .35, "Dm C Dm Dm", { lead: "sparse", drums: 0 })] };
 
+  EX.lingala = { title: "Sebene Nights", key: "E", mode: "major", bpm: 128, style: "lingala", moods: ["joy", "love", "hope"],
+    band: { pad: "organ", comp: "guitar", lead: "eguitar", arp: "eguitar", bass: "ebass" }, motif: { on: [0, 3, 6, 8], deg: [4, 2, 4, 2] },
+    sections: [
+      Sx("intro", 4, .4, "E A B7 E", { lead: "sparse", drums: 1 }),
+      Sx("verse", 8, .6, "E A B7 E", { drums: 2, mel: N("0:0:4:3 0:3:2:3 0:6:4:2 0:8:2:4 0:12:4:4 1:0:5:3 1:3:3:3 1:6:5:2 1:8:7:4 1:12:5:4 2:0:4:3 2:3:6:3 2:6:8:2 2:8:6:4 2:12:4:4 3:0:2:3 3:3:4:3 3:6:2:2 3:8:0:8"),
+        bassline: B("0:0:R:3 0:3:R:2 0:6:5:3 0:10:R:2 0:12:5:2 0:14:a:2"), groove: { kick: "x..x..x...x.....", snare: "....x.......x...", hat: "x.x.x.x.x.x.x.x." } }),
+      Sx("chorus", 8, .8, "A B7 C#m E", { drums: 2, mel: N("0:0:7:3 0:3:5:3 0:6:7:2 0:8:5:4 0:12:7:4 1:0:8:3 1:3:6:3 1:6:8:2 1:8:6:4 1:12:4:4 2:0:7:3 2:3:5:3 2:6:7:2 2:8:5:4 2:12:7:4 3:0:2:3 3:3:4:3 3:6:2:2 3:8:0:8"),
+        bassline: B("0:0:R:3 0:3:R:2 0:6:5:3 0:10:R:2 0:12:5:2 0:14:a:2"), groove: { kick: "x..x..x...x.....", snare: "....x.......x...", hat: "x.x.x.x.x.x.x.x." } }),
+      Sx("solo", 16, .95, "E B7 E B7", { lead: "varied", drums: 2 }),
+      Sx("verse", 8, .65, "E A B7 E", { drums: 2 }),
+      Sx("outro", 4, .4, "E A B7 E", { lead: "sparse", drums: 1 })] };
+
   EX.blues = { title: "Slow Burn Blues", key: "E", mode: "mixolydian", bpm: 78, style: "blues", moods: ["sadness", "love"],
     band: { pad: "none", comp: "hammond", lead: "lguitar", arp: "none", bass: "upbass" }, motif: { on: [0, 4, 8, 10], deg: [4, 2, 0, 2] },
     sections: [
@@ -3772,7 +3808,7 @@
   var FIN = {
     pop: ["bells", 12, { lead: "flute" }], rock: ["hammond", 0, { lead: "eguitar" }], rocknroll: ["sax", 0, { lead: "piano" }], bluegrass: ["violin", 0, { lead: "banjo" }], irish: ["harp", 0, { lead: "flute" }], country: ["violin", 0, { lead: "steel" }], blues: ["sax", 0, { lead: "hammond" }],
     jazz: ["flute", 12, { lead: "keys" }], reggae: ["flute", 12, { lead: "keys" }], funk: ["brass", 0, { lead: "synth" }], hiphop: ["pluck", 0, { lead: "keys" }],
-    trap: ["synth", 12, { lead: "pluck" }], afrobeat: ["eguitar", 0, { lead: "keys" }], phonk: ["bells", 12, { lead: "vox" }], memphis: ["hum", 0, { lead: "bells" }], afrobeats: ["kalimba", 12, { lead: "flute" }], amapiano: ["bells", 12, { lead: "flute" }], lofi: ["kalimba", 12, { lead: "flute" }],
+    trap: ["synth", 12, { lead: "pluck" }], afrobeat: ["eguitar", 0, { lead: "keys" }], lingala: ["horns", 0, { lead: "eguitar" }], phonk: ["bells", 12, { lead: "vox" }], memphis: ["hum", 0, { lead: "bells" }], afrobeats: ["kalimba", 12, { lead: "flute" }], amapiano: ["bells", 12, { lead: "flute" }], lofi: ["kalimba", 12, { lead: "flute" }],
     house: ["synth", 12, { lead: "bells" }], rnb: ["ooh", 0, { lead: "violin" }], ambient: ["harp", 12, { lead: "flute" }], celtic: ["ooh", 0, { lead: "vox" }], opera: ["choir", 0, { lead: "vox" }], cinematic: ["bells", 12, { lead: "flute" }], acoustic: ["flute", 0, { lead: "kalimba" }] };
   var FMIX = { hiphop: { drums: 1.05, bass: 1.15 }, trap: { drums: 1.0, bass: 1.2 }, amapiano: { hats: 1.6, bass: .85, drums: 1.0 }, afrobeats: { hats: 1.5, bass: .95, bassHp: 1.4 }, afrobeat: { hats: 1.2, bass: .95 }, phonk: { drums: 1.0, bass: .75, lead: 1.15 }, memphis: { drums: .95, bass: .5, lead: 1.15 }, house: { drums: 1.1, bass: 1.1 }, ambient: { pad: 1.05, lead: .9 }, cinematic: { pad: 1.05, lead: 1.0 }, lofi: { drums: .9 }, rnb: { drums: .9, lead: 1.05 } };
   Object.keys(EX).forEach(function (k) {

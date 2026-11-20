@@ -432,3 +432,9 @@ New style `country`: boom-chick with a train-beat backbeat, walking upright bass
 
 ## v50 – Irish folk
 New style `irish` ("Irish Folk"): jigs (6/8, two beats of three, about 150-170 bpm), reels (fast 4/4 with running eighths, 104-124 bpm) and an occasional slow waltz. Tin whistle, flute and fiddle carry the tune with quick grace-note "cuts"; guitar or mandolin and a light upright bass underneath, optional accordion-like organ, a bodhrán-style frame-drum pattern, Dorian / Mixolydian / major modal chords, and a lift of key when the last tune starts. A new `reel` arc plays two tunes of two parts each. "play irish folk", "play a jig", "play a reel", "play ceilidh music". Plain "irish" now means Irish folk; Enya-style stays under "celtic", "enya" and "new age". Research: Irish traditional music (dance types, modes, ornaments, instruments). Not done: uilleann pipes, real accordion or concertina, and a real bodhrán recording (the drum is synthesized toms).
+
+## v51 — Lingala (Congolese rumba / soukous)
+- New style `lingala`: two tempo kinds (slow rumba 98–118, fast soukous 136–156), interlocking clean guitars, melodic bass locked to the kick, sax/horn answers, congas and a driving kit.
+- New `sebene` arc: intro, verse, chorus, long guitar dance section (the sebene), call verse, chorus, second sebene with a key lift, outro.
+- YoEcho knows it: catalog entry, UI style list, words like lingala, soukous, ndombolo, sebene, rumba, Franco, Papa Wemba; no longer reported as missing.
+- Honest limits: guitars, bass, horns and congas are synthesized/sampled stand-ins; no Lingala vocals.
