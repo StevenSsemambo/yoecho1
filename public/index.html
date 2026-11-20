@@ -1008,7 +1008,7 @@ function loadEchoMusic(){
   if(_musicPromise) return _musicPromise;
   _musicPromise=new Promise((res,rej)=>{
     const el=document.createElement("script");
-    el.src="/echo-music.js?v=49"; el.async=true;
+    el.src="/echo-music.js?v=50"; el.async=true;
     el.onload=()=>{ if(window.EchoMusic){ window.dispatchEvent(new Event("echomusic-ready")); res(window.EchoMusic); } else rej(new Error("music engine missing")); };
     el.onerror=()=>rej(new Error("could not load the music engine"));
     document.head.appendChild(el);
@@ -1034,7 +1034,7 @@ function genreIn(t){ for(const [re,id] of GENRE_WORDS) if(re.test(t)) return id;
 const MUSIC_CATALOG={
  afrobeats:{vibe:"bright West African dance pop: syncopated percussion, log-drum style bass, guitar and keys",best:"a good mood, dancing, cooking or cleaning, road trips, parties, celebrating",mood:"joy, hope"},
  afrobeat:{vibe:"1970s Fela-Kuti-style Afrobeat: long hypnotic groove, horns, funky guitar, organ",best:"energetic focus, long drives, culture and history lovers, a long jam to work to",mood:"joy, confidence"},
- lingala:{vibe:"Congolese rumba and soukous: bright interlocking clean guitars, a melodic bass, horns answering, congas and a driving kit; a smooth rumba, or a fast soukous with a long guitar dance section (the sebene)",best:"dancing, joyful celebration, weddings and parties, road trips, a warm nostalgic feeling, cooking or cleaning with energy, anyone who loves Congolese and Lingala music",mood:"joy, love, nostalgia"},
+ lingala:{vibe:"Congolese rumba and soukous: bright interlocking clean guitars, a melodic bass, horns answering, congas and a driving kit; each piece is a smooth rumba, a fast soukous, a driving ndombolo (cavacha drums) or a slow rumba ballad, with a long guitar dance section (the sebene) and horn hits",best:"dancing, joyful celebration, weddings and parties, road trips, a warm nostalgic feeling, cooking or cleaning with energy, anyone who loves Congolese and Lingala music",mood:"joy, love, nostalgia"},
  amapiano:{vibe:"South African house with a log-drum bass and jazzy piano",best:"dancing, weekends, parties, easy good vibes",mood:"joy, love"},
  lofi:{vibe:"mellow, dusty beats with soft keys and vinyl crackle",best:"studying, coding, reading, late-night focus, winding down",mood:"calm, neutral, a little wistful"},
  house:{vibe:"club groove with a steady four-on-the-floor kick and synths",best:"workouts, cleaning, parties, shaking off a flat mood",mood:"joy, energy"},

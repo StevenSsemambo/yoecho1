@@ -438,3 +438,10 @@ New style `irish` ("Irish Folk"): jigs (6/8, two beats of three, about 150-170 b
 - New `sebene` arc: intro, verse, chorus, long guitar dance section (the sebene), call verse, chorus, second sebene with a key lift, outro.
 - YoEcho knows it: catalog entry, UI style list, words like lingala, soukous, ndombolo, sebene, rumba, Franco, Papa Wemba; no longer reported as missing.
 - Honest limits: guitars, bass, horns and congas are synthesized/sampled stand-ins; no Lingala vocals.
+
+## v52 — Lingala rebuilt to sound like Lingala
+- Each piece is now one of four sub-styles: rumba (100–118), soukous (136–152), ndombolo (144–160, cavacha snare and 16th hats) or a slow rumba ballad (84–100, minor).
+- Each sub-style has its own drum feel, bass lines, rhythm-guitar chops and chord loops, so two pieces no longer sound alike.
+- A dedicated sebene generator: a one-bar sixteenth-note guitar riff made fresh for every piece (two riffs per piece), moved diatonically along the chords, with a second guitar a third below. Every 4th bar the riff ends in a run, and horns hit together at the top of each phrase.
+- Verses and choruses carry the riff as a softer rolling guitar. The sebene sections take the lead, with a busier kit and a snare and tom roll into each phrase.
+- Honest limits: instruments are still synthesized/sampled stand-ins, there are no Lingala vocals, and it hasn't been checked by ear.

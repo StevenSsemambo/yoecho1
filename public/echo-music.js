@@ -174,7 +174,7 @@
       pal: { pad: ["organ", "strings"], comp: ["eguitar", "keys", "hammond"], lead: ["sax", "brass", "eguitar", "balafon", "keys"], arp: ["eguitar", "balafon", "keys"], bass: ["ebass", "upbass"] },
       arp: { rate: 2, kind: "updown", gate: .6 }, duck: .08, delay: .2, tex: { vinyl: .08, rain: 0, air: 0 } },
     /* Lingala (Congolese rumba and soukous): bright interlocking clean guitars (a high lead over a rolling arpeggio and offbeat chops), a melodic electric bass walking root-fifth, horns answering, congas and a driving kit with a busy snare; a slow rumba verse and chorus, then the sebene, the long instrumental dance section where the guitars take over; a piece is either a rumba (about 100-118) or a soukous (about 136-156) */
-    lingala: { name: "Lingala (Congolese rumba / soukous)", level: 1.06, lay: .3, bpm: [100, 156], bpmKinds: [[98, 118], [136, 156]], swing: .1, arc: "sebene", harm: 1, drums: 2, kit: "afrob", feel: "synco", keyLift: true,
+    lingala: { name: "Lingala (Congolese rumba / soukous)", level: 1.06, lay: .3, bpm: [100, 156], sebene: true, kindW: { rumba: 3, soukous: 4, ndombolo: 3, balada: 1.4 }, swing: .1, arc: "sebene", harm: 1, drums: 2, kit: "afrob", feel: "synco", keyLift: true,
       drum: { kick: "x..x..x...x.....", snare: "....x.......x...", clap: "", hat: "x.x.x.x.x.x.x.x.", open: "", shaker: "xoxoxoxoxoxoxoxo", cLo: "..x.x...x.x...x.", cHi: "...x...x..x.x...", rim: "..x..x..x..x..x.", rimV: .25 },
       comp: ["..x...x...x...x.", "x..x..x...x..x..", "..x.x...x..x.x.."], compGen: ["pat"], bass: ["r..r..5...r.5...", "r...r.5.r...5.a.", "r.5...r.r.5...5."], bassMax: 4,
       pal: { pad: ["organ", "strings"], comp: ["eguitar", "guitar"], lead: ["eguitar", "guitar", "sax"], arp: ["guitar", "eguitar"], bass: ["ebass"] },
@@ -393,6 +393,30 @@
       pal: { pad: ["pad"], comp: ["piano"], lead: ["piano"], arp: ["piano"], bass: ["piano"] },
       arp: { rate: 2, kind: "alberti", gate: .5 }, duck: 0, delay: .24, tex: { vinyl: 0, rain: 0, air: .06 } }
   };
+
+  /* Lingala sub-styles: each piece is one of these, so two pieces differ in tempo, drum feel, bass line, rhythm guitar, chord loop and the sebene riff itself */
+  STYLES.lingala.kinds = {
+    rumba: { bpm: [100, 118], swing: .14, riffR: [[0, 3, 6, 8, 11, 14], [0, 2, 3, 6, 8, 10, 11, 14], [0, 3, 4, 6, 10, 12, 14], [2, 3, 6, 8, 11, 14], [0, 3, 6, 9, 12, 14]], rd: .62,
+      drum: { kick: "x.....x...x.....", snare: "....x.......x...", clap: "", hat: "x.x.x.x.x.x.x.x.", open: "", shaker: "xoxoxoxoxoxoxoxo", cLo: "..x.x...x.x...x.", cHi: "...x...x..x.x...", rim: "..x..x..x..x..x.", rimV: .3 },
+      drumSolo: { kick: "x..x..x...x.x...", hat: "x.x.x.x.x.x.x.x.", open: "..x...x...x...x." },
+      bass: ["r.....5.r...5...", "r..r....5..r.o..", "r.....r.5.a.r.5.", "r..r..5...r.5.a."], comp: ["..x...x...x...x.", ".xx..xx..xx..xx.", "x..x..x...x..x.."],
+      progs: [{ m: "ionian", seq: [[0,"maj"],[5,"maj"],[7,"7"],[0,"maj"]] }, { m: "ionian", seq: [[0,"maj"],[9,"min"],[2,"min"],[7,"7"]] }, { m: "ionian", seq: [[0,"maj"],[2,"7"],[5,"maj"],[7,"7"]] }, { m: "ionian", seq: [[0,"maj"],[5,"maj"],[0,"maj"],[7,"7"]] }] },
+    soukous: { bpm: [136, 152], swing: .06, riffR: [[0, 2, 3, 5, 6, 8, 10, 11, 13, 14], [0, 3, 4, 6, 8, 11, 12, 14, 15], [0, 1, 3, 4, 6, 8, 9, 11, 12, 14], [0, 2, 4, 5, 7, 8, 10, 12, 13, 15]], rd: .9,
+      drum: { kick: "x..x..x...x.x...", snare: "....x.......x...", clap: "", hat: "x.x.x.x.x.x.x.x.", open: "..x...x...x...x.", shaker: "xxxxxxxxxxxxxxxx", cLo: "..x.x...x.x...x.", cHi: "...x...x..x.x...", rim: "", rimV: .3 },
+      drumSolo: { hat: "xxxxxxxxxxxxxxxx", open: "..x...x...x...x.", snare: "....x..x....x..x" },
+      bass: ["r..r..5...r.5...", "r...r.5.r...5.a.", "r.5...r.r.5...5.", "r.r..5r.r.5.r.a."], comp: ["..x.x...x.x...x.", "x..x..x...x..x..", ".x.x.x.x.x.x.x.x"],
+      progs: [{ m: "ionian", seq: [[0,"maj"],[5,"maj"],[7,"7"],[0,"maj"]] }, { m: "ionian", seq: [[0,"maj"],[7,"7"],[0,"maj"],[7,"7"]] }, { m: "ionian", seq: [[0,"maj"],[5,"maj"],[0,"maj"],[7,"7"]] }, { m: "ionian", seq: [[0,"maj"],[9,"min"],[5,"maj"],[7,"7"]] }, { m: "ionian", seq: [[0,"maj"],[2,"min"],[7,"7"],[0,"maj"]] }] },
+    ndombolo: { bpm: [144, 160], swing: .02, riffR: [[0, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15], [0, 1, 3, 4, 6, 7, 9, 10, 12, 13, 15], [0, 3, 4, 6, 7, 9, 10, 12, 13, 15]], rd: 1,
+      drum: { kick: "x..x..x.x..x..x.", snare: "..x...x...x...xx", clap: "", hat: "xxxxxxxxxxxxxxxx", open: "", shaker: "x.x.x.x.x.x.x.x.", cLo: "x..x..x.x..x..x.", cHi: "..x..x..x..x..x.", rim: "", rimV: .3 },
+      drumSolo: { snare: "x.xx.xx.x.xx.xx.", kick: "x..x..x.x..x..x." },
+      bass: ["r..r..r.r..5..r.", "r.r...5.r.r...5.", "r..r.5..r..r.5a."], comp: ["x.x.x.x.x.x.x.x.", ".x.x.x.x.x.x.x.x", "x..x..x.x..x..x."],
+      progs: [{ m: "ionian", seq: [[0,"maj"],[5,"maj"],[0,"maj"],[7,"7"]] }, { m: "ionian", seq: [[0,"maj"],[7,"7"],[5,"maj"],[0,"maj"]] }, { m: "ionian", seq: [[0,"maj"],[5,"maj"],[7,"maj"],[5,"maj"]] }, { m: "ionian", seq: [[0,"maj"],[9,"min"],[5,"maj"],[7,"maj"]] }] },
+    balada: { bpm: [84, 100], swing: .18, riffR: [[0, 6, 10], [0, 4, 8, 12], [0, 3, 6, 10, 12], [2, 6, 8, 14]], rd: .4,
+      drum: { kick: "x.......x.x.....", snare: "....x.......x...", clap: "", hat: "x.x.x.x.x.x.x.x.", open: "", shaker: "x.xox.xox.xox.xo", cLo: "..x.x...x.x...x.", cHi: "", rim: "..x..x..x..x..x.", rimV: .3 },
+      drumSolo: { kick: "x.....x.x.x.....", hat: "x.x.x.x.x.x.x.x." },
+      bass: ["r.......5...r...", "r.....5.r.....a.", "r..r....5...o..."], comp: ["x...x...x...x...", "..x...x...x...x.", "x.xx..x.x.xx..x."],
+      progs: [{ m: "aeolian", seq: [[0,"min"],[5,"min"],[7,"7"],[0,"min"]] }, { m: "aeolian", seq: [[0,"min"],[8,"maj"],[3,"maj"],[7,"7"]] }, { m: "aeolian", seq: [[0,"min"],[3,"maj"],[8,"maj"],[7,"7"]] }] }
+  };
   Object.keys(STYLES).forEach(function (k) { if (!STYLES[k].arp) STYLES[k].arp = { rate: 2, kind: "updown", gate: .6 }; });
   /* what each solo instrument needs: polyphonic ones play melody, chords and bass themselves; single-line ones play the melody over a faint bed */
   var SOLO_SETUP = {
@@ -420,7 +444,6 @@
     rnb: [{ kick: "x.....x..x.x....", hat: "x.x.xxx.x.x.xxx." }, { kick: "x...x...x..x....", clap: "........x......x" }],
     acoustic: [{ kick: "x.....x.x.......", rim: "....x.......x..x" }, { kick: "x.......x.x.....", shaker: "xxx.xxx.xxx.xxx." }],
     country: [{ kick: "x.......x.......", snare: "....x.......x..x", tamb: "x.x.x.x.x.x.x.x." }, { kick: "x...x...x...x...", snare: "..x...x...x...x." }, { kick: "x.......x..x....", hat: "x.x.x.x.x.x.xxx." }],
-    lingala: [{ kick: "x..x..x...x.....", snare: "....x..x....x...", hat: "x.x.x.x.x.x.x.x." }, { kick: "x..x..x...x..x..", snare: "..x.x...x.x.x..." }, { kick: "x..x....x..x....", snare: "....x.......x.xx" }],
     rocknroll: [{ kick: "x.....x.x.......", tamb: "x.x.x.x.x.x.x.x." }, { kick: "x..x....x.x.....", snare: "....x.......x..x" }, { kick: "x.......x..x....", hat: "x.xxx.xxx.xxx.xx" }],
     rock: [{ kick: "x..x..x.x.......", hat: "x.x.x.x.x.x.x.x." }, { kick: "x.x.....x.x.....", hat: "xxxxxxxxxxxxxxxx" }, { kick: "x.......x..x.x..", open: "..x...x...x...x." }, { kick: "x...x...x...x...", snare: "....x.......x..x" }],
     blues: [{ kick: "x.....x.x.......", hat: "x.x.x.x.x.x.x.x." }, { kick: "x.......x..x....", snare: "....x.......x..x" }],
@@ -1310,13 +1333,14 @@
       S.jig = !!(S.style.jig && !PLAN && rng.chance(S.style.jig));
       S.waltz = S.jig || !!(S.style.waltz && !PLAN && rng.chance(S.style.waltz));
       S.bpmTarget = spec.bpmForce || computeBpm(S.style, st.recipe);
-      if (S.style.bpmKinds && !PLAN && !spec.bpmForce) { var bk = rng.pick(S.style.bpmKinds); S.bpmTarget = rng.range(bk[0], bk[1]); }
+      if (S.style.kinds && !PLAN) { S.kind = rng.weighted(S.style.kindW); S.style = Object.assign({}, S.style, S.style.kinds[S.kind]); if (!spec.bpmForce) S.bpmTarget = rng.range(S.style.bpm[0], S.style.bpm[1]); }
       if (S.jig) { if (!spec.bpmForce) S.bpmTarget = rng.range(148, 170); } else if (S.waltz) S.bpmTarget = clamp(S.bpmTarget, 70, 92);
       if (S.barNo === 0) S.bpm = S.bpmTarget;
       S.arcName = chooseArc(S.style, st.recipe);
       S.arcIdx = (i === 0 || S.barNo === 0) ? (spec.skipIntro ? 1 : 0) : 1;   /* later stages skip the intro: the music is already playing */
       S.tex = textures();
       makeProgs(); S.theme = makeTheme(); S.lines = {}; S.riffs = {};
+      S.sk = S.style.sebene && !PLAN ? skInit() : null;
     }
 
     /* ── melody: one theme per piece/stage, developed bar by bar ── */
@@ -1612,6 +1636,59 @@
       for (s2 = 0; s2 < 16; s2++) if (pat.charAt(s2) === "x") for (i = 0; i < v.length; i++) out.push({ s: s2, r: "arp", i: S.pal.arp, m: v[i], d: 2.2, v: BASE_VEL.arp * sec.dyn * 1.15 * (s2 % 4 === 0 ? 1 : .85), p: 2 });
       return out;
     }
+
+    /* ── Lingala sebene: a one-bar guitar riff in sixteenths, moved along the chords step by step, with a second guitar a third below ── */
+    function skMakeRiff(rh, flow) {
+      var cur = rng.pick([0, 2, 4, 4, 7]), offs = [], j, step;
+      for (j = 0; j < rh.length; j++) {
+        step = parseInt(rng.weighted({ "-1": 3, "1": 3, "2": 1.4, "-2": 1.4, "0": flow > .8 ? 2 : 1, "3": .4, "-3": .4 }), 10);
+        cur = clamp(cur + step, -1, 8);
+        if (rh[j] % 4 === 0 && j > 0) cur = [0, 2, 4, 7].reduce(function (a, b) { return Math.abs(b - cur) < Math.abs(a - cur) ? b : a; });
+        offs.push(cur);
+      }
+      var half = Math.floor(rh.length / 2), sh = rng.pick([-1, 1, 2, -2, 0]);
+      if (rh.length >= 6) for (j = half; j < rh.length - 1; j++) if (j - half < half) offs[j] = clamp(offs[j - half] + sh, -1, 8);
+      offs[rh.length - 1] = rng.pick([0, 2, 4, 7]);
+      return { on: rh.slice(), off: offs };
+    }
+    function skInit() {
+      var R = S.style.riffR, a = rng.int(R.length), b = (a + 1 + rng.int(R.length - 1 || 1)) % R.length;
+      return { A: skMakeRiff(R[a], S.style.rd), B: skMakeRiff(R[b], S.style.rd), soloN: 0 };
+    }
+    function skPitch(chord, off, orig) {
+      var sc = lscale(), n = sc.length, rs = ((chordRs(chord) % 12) + 12) % 12, idx = 0, best = 99, i;
+      for (i = 0; i < n; i++) { var dd = Math.abs(sc[i] - rs); if (dd < best) { best = dd; idx = i; } }
+      return orig + ls(idx + off);
+    }
+    function sebeneBar(sec, chord, nextChord) {
+      var out = [], sk = S.sk, solo = sec.kind === "solo", pb = S.secBar % 4, j;
+      if (!sk) return out;
+      if (solo && S.secBar === 0) sk.soloN++;
+      if (!solo && !(sec.layers.arp && S.pal.arp)) return out;
+      var riff = solo ? (sk.soloN % 2 ? sk.A : sk.B) : (sec.kind === "chorus" ? sk.B : sk.A), notes = [];
+      for (j = 0; j < riff.on.length; j++) notes.push({ s: riff.on[j], o: riff.off[j] });
+      if (pb === 1 && notes.length > 2) { notes[notes.length - 1].o += rng.pick([-1, 1]); notes[notes.length - 2].o += rng.pick([-1, 1, 0]); }
+      if (pb === 3 && (solo || sec.kind === "chorus")) {
+        var top = notes.length ? notes[notes.length - 1].o : 4; notes = notes.filter(function (q) { return q.s < 12; });
+        for (j = 0; j < 4; j++) notes.push({ s: 12 + j, o: top + 3 - j });
+      }
+      var instL = S.pal.lead, instA = S.pal.arp || S.pal.lead, origL = leadOrigin(), origA = placeInRange(S.root, (ARP_CENTER[instA] || 74) - 13, (ARP_CENTER[instA] || 74) - 2);
+      for (j = 0; j < notes.length; j++) {
+        var q = notes[j], nx = j < notes.length - 1 ? notes[j + 1].s : 16, dur = Math.max(1, Math.min(nx - q.s, 3) * .85), acc = q.s % 4 === 0 ? 1 : q.s % 2 === 0 ? .86 : .7;
+        if (solo) {
+          out.push({ s: q.s, r: "lead", i: instL, m: skPitch(chord, q.o, origL), d: dur, v: BASE_VEL.lead * sec.dyn * acc * (1 + (rng() - .5) * .1), p: 1 });
+          if (S.pal.arp) out.push({ s: q.s, r: "arp", i: instA, m: skPitch(chord, q.o - 2, origA), d: dur, v: BASE_VEL.arp * 1.3 * sec.dyn * acc, p: 2, pan: -.3 });
+        } else if (sec.kind === "chorus" || j % 2 === 0 || sec.e > .75) {
+          out.push({ s: q.s, r: "arp", i: instA, m: skPitch(chord, q.o, origA), d: dur, v: BASE_VEL.arp * (sec.kind === "chorus" ? 1.15 : .85) * sec.dyn * acc, p: 3, pan: .25 });
+        }
+      }
+      /* the horns hit together at the top of every fourth bar of a sebene or chorus */
+      if ((solo || sec.kind === "chorus") && pb === 0 && S.pal.ans && S.compV) {
+        var hv = S.compV.slice(-3), hs = [0, 3, 6];
+        for (j = 0; j < hs.length; j++) hv.forEach(function (m) { out.push({ s: hs[j], r: "lead", i: S.pal.ans, m: m + 12, d: 1.6, v: BASE_VEL.lead * sec.dyn * (j === 0 ? .8 : .65), p: 2, ans: 1 }); });
+      }
+      return out;
+    }
     function arpBar(sec) {
       var cfg = S.style.arp, out = [], i;
       if (!sec.layers.arp || !S.pal.arp) return out;
@@ -1713,8 +1790,9 @@
     }
     /* ── drums ── */
     function drumBar(sec, firstBar, lastBar) {
-      var dOnly = !!spec.drums, D = S.style.drum, out = [], alts = DRUM_ALT[S.styleName], av = alts ? (sec.drumVar + (dOnly ? Math.floor(S.secBar / 4) : 0)) % (alts.length + 1) : 0;
+      var dOnly = !!spec.drums, D = S.style.drum, out = [], alts = S.style.kinds ? null : DRUM_ALT[S.styleName], av = alts ? (sec.drumVar + (dOnly ? Math.floor(S.secBar / 4) : 0)) % (alts.length + 1) : 0;
       if (av > 0) { var D2 = {}, dk; for (dk in D) D2[dk] = D[dk]; for (dk in alts[av - 1]) D2[dk] = alts[av - 1][dk]; D = D2; }
+      if (S.style.drumSolo && sec.kind === "solo") { var D4 = {}, d4; for (d4 in D) D4[d4] = D[d4]; for (d4 in S.style.drumSolo) D4[d4] = S.style.drumSolo[d4]; D = D4; }
       var gv = sec.gv ? (((S.secBar % 2) === 1 && sec.gv.b) ? sec.gv.b : sec.gv.a) : null;
       if (gv) { var D3 = {}, gk; for (gk in GROOVE_KEYS) D3[gk] = gv[gk] || ""; D3.rimV = D.rimV !== undefined && gv.rim ? D.rimV : .6; D = D3; }
       var _u = [], level = sec.layers.drums, i, s, e = sec.e;
@@ -1778,6 +1856,10 @@
         else if (ft === 4) { hit(12, "drums", "kick", .8); hit(12.5, "drums", "snare", .5); hit(13, "drums", "snare", .6); hit(13.5, "drums", "tom", .6, { n: 2 }); hit(14, "drums", "tom", .7, { n: 1 }); hit(14.5, "drums", "tom", .75, { n: 0 }); hit(15, "drums", "snare", .8); }
         else { for (i = 0; i < 4; i++) hit(12 + i, "drums", "snare", .4 + i * .18); }
         if (rockish && lastBar) hit(15.5, "drums", "kick", .8);
+      } else if (S.style.sebene && !PLAN && !light && endOfGroup && (lastBar || sec.kind === "solo")) {
+        out = out.filter(function (ev) { return !(ev.s >= 10 && ev.r !== "fx" && ev.k !== "crash"); });
+        for (i = 0; i < 12; i++) hit(10 + i / 2, "drums", i % 3 === 2 ? "tom" : "snare", .4 + i * .045, { n: Math.max(0, 3 - Math.floor(i / 3)) });
+        hit(15.5, "drums", "kick", .8);
       } else if (S.style.rolls && rng.chance(.28) && !light) {
         out = out.filter(function (ev) { return !(ev.k === "hat" && ev.s >= 14); });
         for (i = 0; i < 6; i++) hit(14 + i / 3, "perc", "hat", .4 + i * .1);
@@ -1939,11 +2021,11 @@
         S.padV = voice(chord, Math.min(pc, 56), S.padV, 14, false);
         S.compV = voice(chord, COMP_CENTER[S.pal.comp] || 62, S.compV, 14, S.style.rootless);
       }
-      var lastBar = S.secBar === sec.bars - 1, ev = [];
+      var lastBar = S.secBar === sec.bars - 1, ev = [], SB = !!(S.sk && S.style.sebene && !PLAN);
       /* the first intro does not just fade in: its last two bars tease the hook on the lead and let the bass walk in, so the listener hears the tune before the verse */
       var teaser = !PLAN && !S.style.solo && !spec.drums && !SOLO && sec.kind === "intro" && S.secNo === 1 && sec.bars >= 4 && S.secBar >= sec.bars - 2, _tl = sec.lead, _tb = sec.layers.bass;
       if (teaser) { sec.lead = "theme"; sec.layers.bass = S.style.drums !== 0 && sec.layers.drums > 0 ? true : sec.layers.bass; }
-      ev = ev.concat(padBar(sec, chord, chordStart), bassBar(sec, chord, nextChord, cb), compBar(sec, chord, cb), leadBar(sec, chord, ci, cb), answerBar(sec, chord, S.secBar % 4), arpBar(sec), drumBar(sec, S.secBar === 0, lastBar));
+      ev = ev.concat(padBar(sec, chord, chordStart), bassBar(sec, chord, nextChord, cb), compBar(sec, chord, cb), SB && sec.kind === "solo" ? [] : leadBar(sec, chord, ci, cb), answerBar(sec, chord, S.secBar % 4), SB ? sebeneBar(sec, chord, nextChord) : arpBar(sec), drumBar(sec, S.secBar === 0, lastBar));
       if (teaser) { sec.lead = _tl; sec.layers.bass = _tb; if (lastBar) ev.push({ s: 8, r: "fx", k: "revcrash", d: 8, v: .35, p: 2 }); }
       if (sec.vox) {
         if (chordStart || !S.voxV) { S.voxV = voice(chord, sec.vox.i === "choir" ? 60 : 64, S.voxV, 10, false); }
